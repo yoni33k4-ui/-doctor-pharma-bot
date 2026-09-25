@@ -50,9 +50,9 @@ Canal avis client :
       { text: "📱 TEST 3", url: "https://example.com/3" },
       { text: "📱 TEST 4", url: "https://example.com/4" }
     ]
-  ]
-}   );
-  }
+   ]
+ });
+}
 } catch (error) {
   console.error(error);
 }
