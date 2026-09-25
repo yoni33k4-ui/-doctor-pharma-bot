@@ -48,13 +48,18 @@ Canal avis client :
         ],
         [
           { text: "📱 TEST 3", url: "https://example.com/3" },
-          { text: "📱 TEST 4", url: "https://example.com/4" }
-        ]
-      ]
-    }
-  })
-});
+          { text: "📱 TEST 4", url: "https://example.com/            ]
+          ]
+        }
+      })
+    );
+  }
 } catch (error) {
+  console.error(error);
+}
+
+res.sendStatus(200);
+}); catch (error) {
   console.error(error);
 }
 
