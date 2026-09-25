@@ -22,7 +22,7 @@ app.post("/webhook", async (req, res) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: message.chat.id,
-          text: "Nous sommes actuellement ouvert 👍🏻
+          text: "Bienvenue chez Doctor Pharma 33👋
 
 Livraison:🚚 ✅
 3 tournée dans la journée 
@@ -33,31 +33,24 @@ Cadeaux de lancement 🚀
 
 Un paquet de feuille + 1g de ginius farmz offert à chaque commande 🎁
 
-Pour toute prise de commande 📲
-@Ocommande331
-@Ocommande331
-@Ocommande331
-
 Vous pouvez aussi nous contacter directement via notre bot télégramme grâce au lien ci-dessous 
-
-🔗 https://t.me/Doctorpharma33bot
 
 Canal avis client :
 
 🔗 https://tato.im/doctoravis33.",
           reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: "💬 Discussion",
-                  url: GROUP_URL
-                }
-              ]
-            ]
-          }
-        })
-      });
-    }
+  inline_keyboard: [
+    [
+      { text: "📱 TEST 1", url: "https://example.com/1" },
+      { text: "📱 TEST 2", url: "https://example.com/2" }
+    ],
+    [
+      { text: "📱 TEST 3", url: "https://example.com/3" },
+      { text: "📱 TEST 4", url: "https://example.com/4" }
+    ]
+  ]
+}
+
   } catch (error) {
     console.error(error);
   }
