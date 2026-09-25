@@ -38,7 +38,7 @@ Vous pouvez aussi nous contacter directement via notre bot télégramme grâce a
 Canal avis client :
 
 🔗 https://tato.im/doctoravis33.",
-          reply_markup: {
+      reply_markup: {
   inline_keyboard: [
     [
       { text: "📱 TEST 1", url: "https://example.com/1" },
@@ -50,10 +50,11 @@ Canal avis client :
     ]
   ]
 }
-
-  } catch (error) {
-    console.error(error);
-  }
+})
+});
+} catch (error) {
+  console.error(error);
+}
 
   res.sendStatus(200);
 });
