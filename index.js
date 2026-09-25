@@ -18,39 +18,41 @@ app.post("/webhook", async (req, res) => {
 
     if (message && message.text === "/start") {
       await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: message.chat.id,
-          text: "Bienvenue chez Doctor Pharma 33👋
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    chat_id: message.chat.id,
+    text: `Bienvenue chez Doctor Pharma 33👋
 
 Livraison:🚚 ✅
-3 tournée dans la journée 
+3 tournée dans la journée
 
 Meet-up:📍✅ 13h/22h
 
-Cadeaux de lancement 🚀 
+Cadeaux de lancement 🚀
 
-Un paquet de feuille + 1g de ginius farmz offert à chaque commande 🎁
+Un paquet de feuille + 1g de ginius farmz offert
 
-Vous pouvez aussi nous contacter directement via notre bot télégramme grâce au lien ci-dessous 
+Vous pouvez aussi nous contacter directement via notre canal
 
 Canal avis client :
 
-🔗 https://tato.im/doctoravis33.",
-      reply_markup: {
-  inline_keyboard: [
-    [
-      { text: "📱 TEST 1", url: "https://example.com/1" },
-      { text: "📱 TEST 2", url: "https://example.com/2" }
-    ],
-    [
-      { text: "📱 TEST 3", url: "https://example.com/3" },
-      { text: "📱 TEST 4", url: "https://example.com/4" }
-    ]
-  ]
-}
-})
+🔗 https://tato.im/doctoravis33.`,
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "📱 TEST 1", url: "https://example.com/1" },
+          { text: "📱 TEST 2", url: "https://example.com/2" }
+        ],
+        [
+          { text: "📱 TEST 3", url: "https://example.com/3" },
+          { text: "📱 TEST 4", url: "https://example.com/4" }
+        ]
+      ]
+    }
+  })
 });
 } catch (error) {
   console.error(error);
