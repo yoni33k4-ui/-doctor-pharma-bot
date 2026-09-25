@@ -27,7 +27,6 @@ app.post("/webhook", async (req, res) => {
     text: `Bienvenue chez Doctor Pharma 33👋
 
 Livraison:🚚 ✅
-3 tournée dans la journée
 
 Meet-up:📍✅ 13h/22h
 
