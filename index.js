@@ -22,7 +22,29 @@ app.post("/webhook", async (req, res) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: message.chat.id,
-          text: "Bienvenue 👋\n\nRejoins notre espace de discussion avec le bouton ci-dessous.",
+          text: "Nous sommes actuellement ouvert 👍🏻
+
+Livraison:🚚 ✅
+3 tournée dans la journée 
+
+Meet-up:📍✅ 13h/22h
+
+Cadeaux de lancement 🚀 
+
+Un paquet de feuille + 1g de ginius farmz offert à chaque commande 🎁
+
+Pour toute prise de commande 📲
+@Ocommande331
+@Ocommande331
+@Ocommande331
+
+Vous pouvez aussi nous contacter directement via notre bot télégramme grâce au lien ci-dessous 
+
+🔗 https://t.me/Doctorpharma33bot
+
+Canal avis client :
+
+🔗 https://tato.im/doctoravis33.",
           reply_markup: {
             inline_keyboard: [
               [
