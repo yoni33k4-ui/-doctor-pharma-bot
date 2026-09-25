@@ -71,9 +71,8 @@ Canal avis client :
 
               inline_keyboard: [
 
-                [
+                
                   {
-                    {
                     text: "Tato Talk ✈️",
                     url: "https://tato.im/doctorpharma33776"
                   },
