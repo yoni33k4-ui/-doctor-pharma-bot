@@ -5,15 +5,16 @@ app.use(express.json());
 
 const TOKEN = process.env.BOT_TOKEN;
 
-// Lien de ton groupe / discussion Telegram
+// Lien de ton groupe Telegram
+// Remets ici ton lien complet si celui-ci est incomplet
 const GROUP_URL = "https://t.me/+MIB2qImNuyQ00";
 
-// Adresse publique de ton service Render
+// Adresse de ton bot sur Render
 const RENDER_URL = "https://doctor-pharma-bot-iyki.onrender.com";
 
 
 /* =========================
-   PAGE D'ACCUEIL RENDER
+   PAGE D'ACCUEIL
 ========================= */
 
 app.get("/", (req, res) => {
@@ -71,11 +72,10 @@ Canal avis client :
 
               inline_keyboard: [
 
-                
+                [
                   {
                     text: "Tato Talk ✈️",
                     url: "https://tato.im/doctorpharma33776"
-                  },
                   },
                   {
                     text: "📱 TEST 2",
@@ -192,7 +192,7 @@ app.get("/setup-webhook", async (req, res) => {
 
 
 /* =========================
-   LANCEMENT SERVEUR
+   LANCEMENT DU SERVEUR
 ========================= */
 
 const PORT =
