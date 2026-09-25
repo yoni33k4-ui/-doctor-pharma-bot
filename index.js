@@ -42,7 +42,28 @@ app.post("/webhook", async (req, res) => {
 
   res.sendStatus(200);
 });
+app.get("/setup-webhook", async (req, res) => {
+  try {
+    const webhookUrl =
+      "https://doctor-pharma-bot-iyki.onrender.com/webhook";
 
+    const response = await fetch(
+      `https://api.telegram.org/bot${TOKEN}/setWebhook`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: webhookUrl })
+      }
+    );
+
+    const result = await response.json();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      error: "Erreur configuration webhook"
+    });
+  }
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Bot démarré sur le port ${PORT}`);
