@@ -73,8 +73,10 @@ Canal avis client :
 
                 [
                   {
-                    text: "📱 TEST 1",
-                    url: "https://example.com/1"
+                    {
+                    text: "Tato Talk ✈️",
+                    url: "https://tato.im/doctorpharma33776"
+                  },
                   },
                   {
                     text: "📱 TEST 2",
