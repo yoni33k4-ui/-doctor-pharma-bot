@@ -58,11 +58,6 @@ Canal avis client :
 }
 
 res.sendStatus(200);
-}); catch (error) {
-  console.error(error);
-}
-
-  res.sendStatus(200);
 });
 app.get("/setup-webhook", async (req, res) => {
   try {
