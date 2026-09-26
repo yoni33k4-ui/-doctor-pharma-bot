@@ -5,16 +5,15 @@ app.use(express.json());
 
 const TOKEN = process.env.BOT_TOKEN;
 
-// Lien de ton groupe Telegram
-// Remets ici ton lien complet si celui-ci est incomplet
+// Mets ici ton lien COMPLET du groupe Discussion si nécessaire
 const GROUP_URL = "https://t.me/+MIB2qImNuyQ00";
 
-// Adresse de ton bot sur Render
+// Adresse de ton service Render
 const RENDER_URL = "https://doctor-pharma-bot-iyki.onrender.com";
 
 
 /* =========================
-   PAGE D'ACCUEIL
+   PAGE D'ACCUEIL RENDER
 ========================= */
 
 app.get("/", (req, res) => {
@@ -37,21 +36,35 @@ app.post("/webhook", async (req, res) => {
 
       const chatId = message.chat.id;
 
-      const texte = `Bienvenue chez Doctor Pharma 33 👋
+      const texte = `⭐️Bienvenue chez Doctor Pharma 33⭐️
 
-Livraison 🚚 ✅
+Retrouvez toutes les informations et les différents espaces depuis les boutons ci-dessous.
 
-Meet-up 📍✅ 13h/22h
+🚚 Livraison disponible
+📍 Meet-up : 13h–22h
+🎁 Offre de bienvenue disponible
 
-Cadeaux de lancement 🚀
+⭐ Consultez également les avis de nos clients.
 
-Un paquet de feuille + 1g de ginius farmz offert
+📲 Utilisez le menu pour accéder aux différents espaces.
 
-Vous pouvez aussi nous contacter directement via notre canal.
+💬 Une question ? Contactez-nous directement.
 
-Canal avis client :
+Un achat=Un paquet de feuille offert🎁
 
-🔗 https://tato.im/doctoravis33.`;
+COMMENT PASSER COMMANDE ?
+
+🔐1. Identifiez-vous
+Envoyez-nous un message en privé afin de vous identifier et de créer votre mot de passe personnel.
+
+📋2. Accédez au menu
+Une fois votre accès activé, vous pourrez accéder à notre menu via le bot.
+
+📨3. Faites votre commande
+Sélectionnez vos articles directement sur la mini-application et créez votre bon de commande.
+
+💌4. Envoyez-nous votre bon
+Notre contact @o_commande33k`;
 
       const response = await fetch(
         `https://api.telegram.org/bot${TOKEN}/sendMessage`,
@@ -65,39 +78,37 @@ Canal avis client :
           body: JSON.stringify({
 
             chat_id: chatId,
-
             text: texte,
 
             reply_markup: {
 
               inline_keyboard: [
 
+                // TATO TALK
                 [
                   {
-                    text: "Tato Talk ✈️",
+                    text: "✈️ Tato Talk",
                     url: "https://tato.im/doctorpharma33776"
-                  },
-                  {
-                    text: "📱 TEST 2",
-                    url: "https://example.com/2"
                   }
                 ],
 
+                // AVIS + DISCUSSION
                 [
                   {
-                    text: "📱 TEST 3",
-                    url: "https://example.com/3"
+                    text: "⭐ Avis",
+                    url: "https://tato.im/doctoravis33"
                   },
-                  {
-                    text: "📱 TEST 4",
-                    url: "https://example.com/4"
-                  }
-                ],
-
-                [
                   {
                     text: "💬 Discussion",
                     url: GROUP_URL
+                  }
+                ],
+
+                // CONTACT
+                [
+                  {
+                    text: "📞 Contact",
+                    url: "https://t.me/o_commande33k"
                   }
                 ]
 
@@ -146,9 +157,11 @@ app.get("/setup-webhook", async (req, res) => {
   try {
 
     if (!TOKEN) {
+
       return res.status(500).json({
         error: "BOT_TOKEN manquant sur Render"
       });
+
     }
 
     const webhookUrl =
@@ -157,6 +170,7 @@ app.get("/setup-webhook", async (req, res) => {
     const response = await fetch(
       `https://api.telegram.org/bot${TOKEN}/setWebhook`,
       {
+
         method: "POST",
 
         headers: {
@@ -170,8 +184,7 @@ app.get("/setup-webhook", async (req, res) => {
       }
     );
 
-    const result =
-      await response.json();
+    const result = await response.json();
 
     res.json(result);
 
@@ -195,8 +208,7 @@ app.get("/setup-webhook", async (req, res) => {
    LANCEMENT DU SERVEUR
 ========================= */
 
-const PORT =
-  process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
 
