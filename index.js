@@ -94,7 +94,9 @@ Envoyez-nous un message en privé afin de vous identifier et de créer votre mot
 Une fois votre accès activé, vous pourrez accéder à notre menu via le bot.
 
 📨 3. Faites votre commande
-Sélectionnez vos articles directement sur la mini-application et créez votre bon de commande.`;
+Sélectionnez vos articles directement sur la mini-application et créez votre bon de commande.
+
+<b>Appuie sur /start pour actualiser le menu</b>`;
 
 
       // ========================================
@@ -224,6 +226,8 @@ Sélectionnez vos articles directement sur la mini-application et créez votre b
             chat_id: chatId,
 
             text: texte,
+
+            parse_mode: "HTML",
 
             reply_markup: boutons,
 
