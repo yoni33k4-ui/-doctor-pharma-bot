@@ -5,36 +5,50 @@ app.use(express.json());
 
 const TOKEN = process.env.BOT_TOKEN;
 
+// ==============================
 // LIENS
-const DISCUSSION_URL = "https://t.me/+MIB2qImNuyQ00";
-const NEW_CANAL_URL = "https://t.me/+MIB2qImNuyQ0OWY0";
-const WHATSAPP_URL = "https://wa.me/33758106388";
+// ==============================
+
 const TATO_URL = "https://tato.im/doctorpharma33776";
+
+const NEW_CANAL_URL = "https://t.me/+MIB2qImNuyQ0OWY0";
+
+const WHATSAPP_URL = "https://wa.me/33758106388";
+
+// Remplace uniquement ces liens si nécessaire
 const AVIS_URL = "https://tato.im/doctoravis33";
+
+const DISCUSSION_URL = "https://t.me/+MIB2qImNuyQ0OWY0";
+
 const CONTACT_URL = "https://t.me/o_commande33k";
 
-// RENDER
-const RENDER_URL = "https://doctor-pharma-bot-iyki.onrender.com";
+// ==============================
+// PHOTO DU MESSAGE
+// ==============================
+
+const PHOTO_URL =
+  "https://yoni33k4-ui.github.io/doctor-pharma-miniapp-test/doctor-pharma.jpg";
 
 
-/* =========================
-   PAGE RENDER
-========================= */
+// ==============================
+// PAGE TEST RENDER
+// ==============================
 
 app.get("/", (req, res) => {
   res.send("Bot Telegram actif ✅");
 });
 
 
-/* =========================
-   WEBHOOK TELEGRAM
-========================= */
+// ==============================
+// WEBHOOK TELEGRAM
+// ==============================
 
 app.post("/webhook", async (req, res) => {
 
+  const update = req.body;
+
   try {
 
-    const update = req.body;
     const message = update.message;
 
     if (message && message.text === "/start") {
@@ -55,25 +69,31 @@ Retrouvez toutes les informations et les différents espaces depuis les boutons 
 
 💬 Une question ? Contactez-nous directement.
 
-Un achat=Un paquet de feuille offert🎁
+Un achat = Un paquet de feuille offert 🎁
 
 COMMENT PASSER COMMANDE ?
 
-🔐1. Identifiez-vous
+🔐 1. Identifiez-vous
 Envoyez-nous un message en privé afin de vous identifier et de créer votre mot de passe personnel.
 
-📋2. Accédez au menu
+📋 2. Accédez au menu
 Une fois votre accès activé, vous pourrez accéder à notre menu via le bot.
 
-📨3. Faites votre commande
+📨 3. Faites votre commande
 Sélectionnez vos articles directement sur la mini-application et créez votre bon de commande.
 
-💌4. Envoyez-nous votre bon
+💌 4. Envoyez-nous votre bon
 Notre contact @o_commande33k`;
 
+
+      // ==============================
+      // ENVOI PHOTO + TEXTE + BOUTONS
+      // ==============================
+
       const response = await fetch(
-        `https://api.telegram.org/bot${TOKEN}/sendMessage`,
+        `https://api.telegram.org/bot${TOKEN}/sendPhoto`,
         {
+
           method: "POST",
 
           headers: {
@@ -83,7 +103,10 @@ Notre contact @o_commande33k`;
           body: JSON.stringify({
 
             chat_id: chatId,
-            text: texte,
+
+            photo: PHOTO_URL,
+
+            caption: texte,
 
             reply_markup: {
 
@@ -138,6 +161,7 @@ Notre contact @o_commande33k`;
         }
       );
 
+
       const telegramResult = await response.json();
 
       if (!telegramResult.ok) {
@@ -149,7 +173,9 @@ Notre contact @o_commande33k`;
 
       } else {
 
-        console.log("Message envoyé ✅");
+        console.log(
+          "Photo + message envoyés ✅"
+        );
 
       }
 
@@ -164,28 +190,23 @@ Notre contact @o_commande33k`;
 
   }
 
+
   res.sendStatus(200);
 
 });
 
 
-/* =========================
-   CONFIGURATION WEBHOOK
-========================= */
+// ==============================
+// CONFIGURATION WEBHOOK
+// ==============================
 
 app.get("/setup-webhook", async (req, res) => {
 
   try {
 
-    if (!TOKEN) {
+    const webhookUrl =
+      "https://doctor-pharma-bot-iyki.onrender.com/webhook";
 
-      return res.status(500).json({
-        error: "BOT_TOKEN manquant sur Render"
-      });
-
-    }
-
-    const webhookUrl = `${RENDER_URL}/webhook`;
 
     const response = await fetch(
       `https://api.telegram.org/bot${TOKEN}/setWebhook`,
@@ -204,16 +225,14 @@ app.get("/setup-webhook", async (req, res) => {
       }
     );
 
+
     const result = await response.json();
 
     res.json(result);
 
   } catch (error) {
 
-    console.error(
-      "Erreur configuration webhook :",
-      error
-    );
+    console.error(error);
 
     res.status(500).json({
       error: "Erreur configuration webhook"
@@ -224,16 +243,16 @@ app.get("/setup-webhook", async (req, res) => {
 });
 
 
-/* =========================
-   LANCEMENT SERVEUR
-========================= */
+// ==============================
+// DÉMARRAGE SERVEUR
+// ==============================
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
 
   console.log(
-    `Bot démarré sur le port ${PORT} ✅`
+    `Bot démarré sur le port ${PORT}`
   );
 
 });
