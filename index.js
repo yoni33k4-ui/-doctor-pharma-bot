@@ -5,43 +5,52 @@ app.use(express.json());
 
 const TOKEN = process.env.BOT_TOKEN;
 
-// ==============================
+
+// ========================================
 // LIENS
-// ==============================
+// ========================================
 
-const TATO_URL = "https://tato.im/doctorpharma33776";
+const TATO_URL =
+  "https://tato.im/doctorpharma33776";
 
-const NEW_CANAL_URL = "https://t.me/+MIB2qImNuyQ0OWY0";
+const AVIS_URL =
+  "https://tato.im/doctoravis33";
 
-const WHATSAPP_URL = "https://wa.me/33758106388";
+const DISCUSSION_URL =
+  "https://t.me/+MIB2qImNuyQ0OWY0";
 
-// Remplace uniquement ces liens si nécessaire
-const AVIS_URL = "https://tato.im/doctoravis33";
+const NEW_CANAL_URL =
+  "https://t.me/+MIB2qImNuyQ0OWY0";
 
-const DISCUSSION_URL = "https://t.me/+MIB2qImNuyQ0OWY0";
+const WHATSAPP_URL =
+  "https://wa.me/33758106388";
 
-const CONTACT_URL = "https://t.me/o_commande33k";
+const CONTACT_URL =
+  "https://t.me/o_commande33k";
 
-// ==============================
-// PHOTO DU MESSAGE
-// ==============================
+
+// ========================================
+// PHOTO D'ACCUEIL
+// ========================================
 
 const PHOTO_URL =
-  "https://yoni33k4-ui.github.io/doctor-pharma-miniapp-test/doctor-pharma.jpg";
+  "https://raw.githubusercontent.com/yoni33k4-ui/-doctor-pharma-bot/main/78BAC377-E9CB-42CF-9325-92C458896A79.png";
 
 
-// ==============================
+// ========================================
 // PAGE TEST RENDER
-// ==============================
+// ========================================
 
 app.get("/", (req, res) => {
+
   res.send("Bot Telegram actif ✅");
+
 });
 
 
-// ==============================
+// ========================================
 // WEBHOOK TELEGRAM
-// ==============================
+// ========================================
 
 app.post("/webhook", async (req, res) => {
 
@@ -54,6 +63,11 @@ app.post("/webhook", async (req, res) => {
     if (message && message.text === "/start") {
 
       const chatId = message.chat.id;
+
+
+      // ========================================
+      // TEXTE D'ACCUEIL
+      // ========================================
 
       const texte = `⭐️Bienvenue chez Doctor Pharma 33⭐️
 
@@ -80,18 +94,123 @@ Envoyez-nous un message en privé afin de vous identifier et de créer votre mot
 Une fois votre accès activé, vous pourrez accéder à notre menu via le bot.
 
 📨 3. Faites votre commande
-Sélectionnez vos articles directement sur la mini-application et créez votre bon de commande.
-
-💌 4. Envoyez-nous votre bon
-Notre contact @o_commande33k`;
+Sélectionnez vos articles directement sur la mini-application et créez votre bon de commande.`;
 
 
-      // ==============================
-      // ENVOI PHOTO + TEXTE + BOUTONS
-      // ==============================
+      // ========================================
+      // BOUTONS
+      // ========================================
 
-      const response = await fetch(
-        `https://api.telegram.org/bot${TOKEN}/sendPhoto`,
+      const boutons = {
+
+        inline_keyboard: [
+
+          [
+            {
+              text: "✈️ Tato Talk",
+              url: TATO_URL
+            }
+          ],
+
+          [
+            {
+              text: "⭐ Avis",
+              url: AVIS_URL
+            },
+            {
+              text: "💬 Discussion",
+              url: DISCUSSION_URL
+            }
+          ],
+
+          [
+            {
+              text: "📢 New Canal",
+              url: NEW_CANAL_URL
+            },
+            {
+              text: "🟢 WhatsApp",
+              url: WHATSAPP_URL
+            }
+          ],
+
+          [
+            {
+              text: "📞 Contact",
+              url: CONTACT_URL
+            }
+          ]
+
+        ]
+
+      };
+
+
+      // ========================================
+      // 1. ENVOI DE LA PHOTO
+      // ========================================
+
+      try {
+
+        const photoResponse = await fetch(
+          `https://api.telegram.org/bot${TOKEN}/sendPhoto`,
+          {
+
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+
+              chat_id: chatId,
+
+              photo: PHOTO_URL,
+
+              caption: "⭐️ Doctor Pharma 33 ⭐️"
+
+            })
+
+          }
+        );
+
+
+        const photoResult =
+          await photoResponse.json();
+
+
+        if (!photoResult.ok) {
+
+          console.error(
+            "Erreur photo Telegram :",
+            photoResult
+          );
+
+        } else {
+
+          console.log(
+            "Photo envoyée ✅"
+          );
+
+        }
+
+      } catch (photoError) {
+
+        console.error(
+          "Erreur pendant l'envoi de la photo :",
+          photoError
+        );
+
+      }
+
+
+      // ========================================
+      // 2. ENVOI DU TEXTE + BOUTONS
+      // ========================================
+
+      const messageResponse = await fetch(
+        `https://api.telegram.org/bot${TOKEN}/sendMessage`,
         {
 
           method: "POST",
@@ -104,57 +223,11 @@ Notre contact @o_commande33k`;
 
             chat_id: chatId,
 
-            photo: PHOTO_URL,
+            text: texte,
 
-            caption: texte,
+            reply_markup: boutons,
 
-            reply_markup: {
-
-              inline_keyboard: [
-
-                // TATO TALK
-                [
-                  {
-                    text: "✈️ Tato Talk",
-                    url: TATO_URL
-                  }
-                ],
-
-                // AVIS + DISCUSSION
-                [
-                  {
-                    text: "⭐ Avis",
-                    url: AVIS_URL
-                  },
-                  {
-                    text: "💬 Discussion",
-                    url: DISCUSSION_URL
-                  }
-                ],
-
-                // NEW CANAL + WHATSAPP
-                [
-                  {
-                    text: "📢 New Canal",
-                    url: NEW_CANAL_URL
-                  },
-                  {
-                    text: "🟢 WhatsApp",
-                    url: WHATSAPP_URL
-                  }
-                ],
-
-                // CONTACT
-                [
-                  {
-                    text: "📞 Contact",
-                    url: CONTACT_URL
-                  }
-                ]
-
-              ]
-
-            }
+            disable_web_page_preview: true
 
           })
 
@@ -162,19 +235,21 @@ Notre contact @o_commande33k`;
       );
 
 
-      const telegramResult = await response.json();
+      const messageResult =
+        await messageResponse.json();
 
-      if (!telegramResult.ok) {
+
+      if (!messageResult.ok) {
 
         console.error(
-          "Erreur Telegram :",
-          telegramResult
+          "Erreur message Telegram :",
+          messageResult
         );
 
       } else {
 
         console.log(
-          "Photo + message envoyés ✅"
+          "Message + boutons envoyés ✅"
         );
 
       }
@@ -196,9 +271,9 @@ Notre contact @o_commande33k`;
 });
 
 
-// ==============================
+// ========================================
 // CONFIGURATION WEBHOOK
-// ==============================
+// ========================================
 
 app.get("/setup-webhook", async (req, res) => {
 
@@ -219,14 +294,18 @@ app.get("/setup-webhook", async (req, res) => {
         },
 
         body: JSON.stringify({
+
           url: webhookUrl
+
         })
 
       }
     );
 
 
-    const result = await response.json();
+    const result =
+      await response.json();
+
 
     res.json(result);
 
@@ -235,7 +314,10 @@ app.get("/setup-webhook", async (req, res) => {
     console.error(error);
 
     res.status(500).json({
-      error: "Erreur configuration webhook"
+
+      error:
+        "Erreur configuration webhook"
+
     });
 
   }
@@ -243,11 +325,13 @@ app.get("/setup-webhook", async (req, res) => {
 });
 
 
-// ==============================
+// ========================================
 // DÉMARRAGE SERVEUR
-// ==============================
+// ========================================
 
-const PORT = process.env.PORT || 3000;
+const PORT =
+  process.env.PORT || 3000;
+
 
 app.listen(PORT, () => {
 
