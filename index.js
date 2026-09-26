@@ -5,15 +5,20 @@ app.use(express.json());
 
 const TOKEN = process.env.BOT_TOKEN;
 
-// Mets ici ton lien COMPLET du groupe Discussion si nécessaire
-const GROUP_URL = "https://t.me/+MIB2qImNuyQ00";
+// LIENS
+const DISCUSSION_URL = "https://t.me/+MIB2qImNuyQ00";
+const NEW_CANAL_URL = "https://t.me/+MIB2qImNuyQ0OWY0";
+const WHATSAPP_URL = "https://wa.me/33758106388";
+const TATO_URL = "https://tato.im/doctorpharma33776";
+const AVIS_URL = "https://tato.im/doctoravis33";
+const CONTACT_URL = "https://t.me/o_commande33k";
 
-// Adresse de ton service Render
+// RENDER
 const RENDER_URL = "https://doctor-pharma-bot-iyki.onrender.com";
 
 
 /* =========================
-   PAGE D'ACCUEIL RENDER
+   PAGE RENDER
 ========================= */
 
 app.get("/", (req, res) => {
@@ -88,7 +93,7 @@ Notre contact @o_commande33k`;
                 [
                   {
                     text: "✈️ Tato Talk",
-                    url: "https://tato.im/doctorpharma33776"
+                    url: TATO_URL
                   }
                 ],
 
@@ -96,11 +101,23 @@ Notre contact @o_commande33k`;
                 [
                   {
                     text: "⭐ Avis",
-                    url: "https://tato.im/doctoravis33"
+                    url: AVIS_URL
                   },
                   {
                     text: "💬 Discussion",
-                    url: GROUP_URL
+                    url: DISCUSSION_URL
+                  }
+                ],
+
+                // NEW CANAL + WHATSAPP
+                [
+                  {
+                    text: "📢 New Canal",
+                    url: NEW_CANAL_URL
+                  },
+                  {
+                    text: "🟢 WhatsApp",
+                    url: WHATSAPP_URL
                   }
                 ],
 
@@ -108,7 +125,7 @@ Notre contact @o_commande33k`;
                 [
                   {
                     text: "📞 Contact",
-                    url: "https://t.me/o_commande33k"
+                    url: CONTACT_URL
                   }
                 ]
 
@@ -124,12 +141,16 @@ Notre contact @o_commande33k`;
       const telegramResult = await response.json();
 
       if (!telegramResult.ok) {
+
         console.error(
           "Erreur Telegram :",
           telegramResult
         );
+
       } else {
+
         console.log("Message envoyé ✅");
+
       }
 
     }
@@ -164,8 +185,7 @@ app.get("/setup-webhook", async (req, res) => {
 
     }
 
-    const webhookUrl =
-      `${RENDER_URL}/webhook`;
+    const webhookUrl = `${RENDER_URL}/webhook`;
 
     const response = await fetch(
       `https://api.telegram.org/bot${TOKEN}/setWebhook`,
@@ -205,7 +225,7 @@ app.get("/setup-webhook", async (req, res) => {
 
 
 /* =========================
-   LANCEMENT DU SERVEUR
+   LANCEMENT SERVEUR
 ========================= */
 
 const PORT = process.env.PORT || 3000;
