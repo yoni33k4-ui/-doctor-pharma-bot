@@ -16,9 +16,6 @@ const TATO_URL =
 const AVIS_URL =
   "https://tato.im/doctoravis33";
 
-const DISCUSSION_URL =
-  "https://t.me/+MIB2qImNuyQ0OWY0";
-
 const NEW_CANAL_URL =
   "https://t.me/+MIB2qImNuyQ0OWY0";
 
@@ -27,6 +24,9 @@ const WHATSAPP_URL =
 
 const CONTACT_URL =
   "https://t.me/o_commande33k";
+
+const BOUTIQUE_URL =
+  "https://doctor-pharma-shop.lovable.app/";
 
 
 // ========================================
@@ -66,37 +66,21 @@ app.post("/webhook", async (req, res) => {
 
 
       // ========================================
-      // TEXTE D'ACCUEIL
+      // NOUVEAU TEXTE D'ACCUEIL
       // ========================================
 
-      const texte = `⭐️Bienvenue chez Doctor Pharma 33⭐️
+      const texte = `⛰️⭐️BIENVENUE CHEZ DOCTOR PHARMA 33⭐️⛰️
 
-Retrouvez toutes les informations et les différents espaces depuis les boutons ci-dessous.
+🏪La pharmacie bordelaise est enfin disponible sur Telegram ! 🏪🔥
 
-🚚 Livraison disponible
-📍 Meet-up : 13h–22h
-🎁 Offre de bienvenue disponible
+💎 Premium quality : ✅
+📦 Livraison : ✅
+📍En main propre : ✅
+📞Service Client : Une équipe réactive et à l’écoute ✅
 
-⭐ Consultez également les avis de nos clients.
+👇 Accède au menu en cliquant sur le bouton boutique 📲
 
-📲 Utilisez le menu pour accéder aux différents espaces.
-
-💬 Une question ? Contactez-nous directement.
-
-Un achat = Un paquet de feuille offert 🎁
-
-COMMENT PASSER COMMANDE ?
-
-🔐 1. Identifiez-vous
-Envoyez-nous un message en privé afin de vous identifier et de créer votre mot de passe personnel.
-
-📋 2. Accédez au menu
-Une fois votre accès activé, vous pourrez accéder à notre menu via le bot.
-
-📨 3. Faites votre commande
-Sélectionnez vos articles directement sur la mini-application et créez votre bon de commande.
-
-<b>Appuie sur /start pour actualiser le menu</b>`;
+⚠️Important : Appuie sur /start pour actualiser le menu et profiter pleinement des dernières mise à jour de la mini app.`;
 
 
       // ========================================
@@ -107,6 +91,7 @@ Sélectionnez vos articles directement sur la mini-application et créez votre b
 
         inline_keyboard: [
 
+          // TATO TALK
           [
             {
               text: "✈️ Tato Talk",
@@ -114,17 +99,19 @@ Sélectionnez vos articles directement sur la mini-application et créez votre b
             }
           ],
 
+          // AVIS + CONTACT
           [
             {
               text: "⭐ Avis",
               url: AVIS_URL
             },
             {
-              text: "💬 Discussion",
-              url: DISCUSSION_URL
+              text: "📞 Contact",
+              url: CONTACT_URL
             }
           ],
 
+          // CANAL + WHATSAPP
           [
             {
               text: "📢 New Canal",
@@ -136,10 +123,13 @@ Sélectionnez vos articles directement sur la mini-application et créez votre b
             }
           ],
 
+          // BOUTIQUE
           [
             {
-              text: "📞 Contact",
-              url: CONTACT_URL
+              text: "🏪 Boutique 🥼",
+              web_app: {
+                url: BOUTIQUE_URL
+              }
             }
           ]
 
@@ -226,8 +216,6 @@ Sélectionnez vos articles directement sur la mini-application et créez votre b
             chat_id: chatId,
 
             text: texte,
-
-            parse_mode: "HTML",
 
             reply_markup: boutons,
 
