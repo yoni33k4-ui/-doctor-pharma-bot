@@ -66,7 +66,7 @@ app.post("/webhook", async (req, res) => {
 
 
       // ========================================
-      // NOUVEAU TEXTE D'ACCUEIL
+      // TEXTE D'ACCUEIL
       // ========================================
 
       const texte = `⛰️⭐️BIENVENUE CHEZ DOCTOR PHARMA 33⭐️⛰️
@@ -74,8 +74,6 @@ app.post("/webhook", async (req, res) => {
 🏪La pharmacie bordelaise est enfin disponible sur Telegram ! 🏪🔥
 
 💎 Premium quality : ✅
-📦 Livraison : ✅
-📍En main propre : ✅
 📞Service Client : Une équipe réactive et à l’écoute ✅
 
 👇 Accède au menu en cliquant sur le bouton boutique 📲
