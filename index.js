@@ -10,7 +10,10 @@ const TOKEN = (process.env.BOT_TOKEN || "").trim();
 const BASE_URL =
   "https://doctor-pharma-bot-iyki.onrender.com";
 
-const PHOTO_PATH = path.join(__dirname, "accueil.jpg");
+const PHOTO_NAME =
+  "3168703F-5AD2-4B96-A901-3E86B0355FF8.png";
+
+const PHOTO_PATH = path.join(__dirname, PHOTO_NAME);
 
 // ========================================
 // LIENS
@@ -97,7 +100,8 @@ async function telegram(method, body) {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000)
     }
   );
 
@@ -105,7 +109,7 @@ async function telegram(method, body) {
 
   if (!result.ok) {
     throw new Error(
-      `Telegram ${method} : ${result.description || "erreur inconnue"}`
+      `${method} : ${result.description || "Erreur Telegram"}`
     );
   }
 
@@ -117,28 +121,29 @@ async function telegram(method, body) {
 // ========================================
 
 async function envoyerPhoto(chatId) {
-  if (!fs.existsSync(PHOTO_PATH)) {
-    throw new Error(
-      "Image introuvable : ajoute accueil.jpg à côté de index.js."
-    );
+  if (!TOKEN) {
+    throw new Error("BOT_TOKEN est manquant sur Render.");
   }
 
   const image = await fs.promises.readFile(PHOTO_PATH);
 
   const form = new FormData();
+
   form.append("chat_id", String(chatId));
   form.append("caption", "⭐️ Doctor Pharma 33 ⭐️");
+
   form.append(
     "photo",
-    new Blob([image], { type: "image/jpeg" }),
-    "accueil.jpg"
+    new Blob([image], { type: "image/png" }),
+    PHOTO_NAME
   );
 
   const response = await fetch(
     `https://api.telegram.org/bot${TOKEN}/sendPhoto`,
     {
       method: "POST",
-      body: form
+      body: form,
+      signal: AbortSignal.timeout(30000)
     }
   );
 
@@ -146,7 +151,7 @@ async function envoyerPhoto(chatId) {
 
   if (!result.ok) {
     throw new Error(
-      `Photo Telegram : ${result.description || "erreur inconnue"}`
+      result.description || "Erreur pendant l’envoi de la photo"
     );
   }
 
@@ -166,7 +171,7 @@ app.get("/", (req, res) => {
 // ========================================
 
 app.post("/webhook", async (req, res) => {
-  const message = req.body.message;
+  const message = req.body?.message;
 
   if (
     !message ||
@@ -180,12 +185,19 @@ app.post("/webhook", async (req, res) => {
 
   console.log("Commande /start reçue ✅");
 
+  // Photo envoyée en premier.
   try {
     await envoyerPhoto(chatId);
   } catch (error) {
-    console.error("Erreur photo :", error.message);
+    console.error(
+      "Erreur photo :",
+      error.code === "ENOENT"
+        ? `Image introuvable : ${PHOTO_NAME}. Place-la à côté de index.js.`
+        : error.message
+    );
   }
 
+  // Texte et boutons envoyés ensuite.
   try {
     await telegram("sendMessage", {
       chat_id: chatId,
@@ -203,7 +215,7 @@ app.post("/webhook", async (req, res) => {
 });
 
 // ========================================
-// CONFIGURATION WEBHOOK
+// CONFIGURATION DU WEBHOOK
 // ========================================
 
 async function configurerWebhook() {
@@ -228,13 +240,19 @@ app.get("/setup-webhook", async (req, res) => {
 });
 
 // ========================================
-// DÉMARRAGE
+// DÉMARRAGE DU SERVEUR
 // ========================================
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, async () => {
   console.log(`Serveur démarré sur le port ${PORT}`);
+
+  if (fs.existsSync(PHOTO_PATH)) {
+    console.log(`Photo trouvée : ${PHOTO_NAME} ✅`);
+  } else {
+    console.error(`Photo introuvable : ${PHOTO_NAME}`);
+  }
 
   try {
     const result = await telegram("getMe", {});
