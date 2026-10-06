@@ -1,75 +1,33 @@
 const express = require("express");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const app = express();
 app.use(express.json());
 
-const TOKEN = process.env.BOT_TOKEN;
+const TOKEN = (process.env.BOT_TOKEN || "").trim();
 
+const BASE_URL =
+  "https://doctor-pharma-bot-iyki.onrender.com";
+
+const PHOTO_PATH = path.join(__dirname, "accueil.jpg");
 
 // ========================================
 // LIENS
 // ========================================
 
-const TATO_URL =
-  "https://tato.im/doctorpharma33776";
-
-const AVIS_URL =
-  "https://tato.im/doctoravis33";
-
-const NEW_CANAL_URL =
-  "https://t.me/+MIB2qImNuyQ0OWY0";
-
-const WHATSAPP_URL =
-  "https://wa.me/33758106388";
-
-const CONTACT_URL =
-  "https://t.me/o_commande33k";
-
-const BOUTIQUE_URL =
-  "https://doctor-pharma-shop.lovable.app/";
-
+const TATO_URL = "https://tato.im/doctorpharma33776";
+const AVIS_URL = "https://tato.im/doctoravis33";
+const NEW_CANAL_URL = "https://t.me/+MIB2qImNuyQ0OWY0";
+const WHATSAPP_URL = "https://wa.me/33758106388";
+const CONTACT_URL = "https://t.me/o_commande33k";
+const BOUTIQUE_URL = "https://doctor-pharma-shop.lovable.app/";
 
 // ========================================
-// PHOTO D'ACCUEIL
+// TEXTE D'ACCUEIL
 // ========================================
 
-const PHOTO_URL =
-  "https://raw.githubusercontent.com/yoni33k4-ui/-doctor-pharma-bot/main/78BAC377-E9CB-42CF-9325-92C458896A79.png";
-
-
-// ========================================
-// PAGE TEST RENDER
-// ========================================
-
-app.get("/", (req, res) => {
-
-  res.send("Bot Telegram actif ✅");
-
-});
-
-
-// ========================================
-// WEBHOOK TELEGRAM
-// ========================================
-
-app.post("/webhook", async (req, res) => {
-
-  const update = req.body;
-
-  try {
-
-    const message = update.message;
-
-    if (message && message.text === "/start") {
-
-      const chatId = message.chat.id;
-
-
-      // ========================================
-      // TEXTE D'ACCUEIL
-      // ========================================
-
-      const texte = `⛰️⭐️BIENVENUE CHEZ DOCTOR PHARMA 33⭐️⛰️
+const TEXTE = `⛰️⭐️BIENVENUE CHEZ DOCTOR PHARMA 33⭐️⛰️
 
 🏪La pharmacie bordelaise est enfin disponible sur Telegram ! 🏪🔥
 
@@ -78,255 +36,217 @@ app.post("/webhook", async (req, res) => {
 
 👇 Accède au menu en cliquant sur le bouton boutique 📲
 
-⚠️Important : Appuie sur /start pour actualiser le menu et profiter pleinement des dernières mise à jour de la mini app.`;
+⚠️Important : Appuie sur /start pour actualiser le menu et profiter pleinement des dernières mises à jour de la mini app.`;
 
+// ========================================
+// BOUTONS
+// ========================================
 
-      // ========================================
-      // BOUTONS
-      // ========================================
-
-      const boutons = {
-
-        inline_keyboard: [
-
-          // TATO TALK
-          [
-            {
-              text: "✈️ Tato Talk",
-              url: TATO_URL
-            }
-          ],
-
-          // AVIS + CONTACT
-          [
-            {
-              text: "⭐ Avis",
-              url: AVIS_URL
-            },
-            {
-              text: "📞 Contact",
-              url: CONTACT_URL
-            }
-          ],
-
-          // CANAL + WHATSAPP
-          [
-            {
-              text: "📢 New Canal",
-              url: NEW_CANAL_URL
-            },
-            {
-              text: "🟢 WhatsApp",
-              url: WHATSAPP_URL
-            }
-          ],
-
-          // BOUTIQUE
-          [
-            {
-              text: "🏪 Boutique 🥼",
-              web_app: {
-                url: BOUTIQUE_URL
-              }
-            }
-          ]
-
-        ]
-
-      };
-
-
-      // ========================================
-      // 1. ENVOI DE LA PHOTO
-      // ========================================
-
-      try {
-
-        const photoResponse = await fetch(
-          `https://api.telegram.org/bot${TOKEN}/sendPhoto`,
-          {
-
-            method: "POST",
-
-            headers: {
-              "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify({
-
-              chat_id: chatId,
-
-              photo: PHOTO_URL,
-
-              caption: "⭐️ Doctor Pharma 33 ⭐️"
-
-            })
-
-          }
-        );
-
-
-        const photoResult =
-          await photoResponse.json();
-
-
-        if (!photoResult.ok) {
-
-          console.error(
-            "Erreur photo Telegram :",
-            photoResult
-          );
-
-        } else {
-
-          console.log(
-            "Photo envoyée ✅"
-          );
-
-        }
-
-      } catch (photoError) {
-
-        console.error(
-          "Erreur pendant l'envoi de la photo :",
-          photoError
-        );
-
+const BOUTONS = {
+  inline_keyboard: [
+    [
+      {
+        text: "✈️ Tato Talk",
+        url: TATO_URL
       }
-
-
-      // ========================================
-      // 2. ENVOI DU TEXTE + BOUTONS
-      // ========================================
-
-      const messageResponse = await fetch(
-        `https://api.telegram.org/bot${TOKEN}/sendMessage`,
-        {
-
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json"
-          },
-
-          body: JSON.stringify({
-
-            chat_id: chatId,
-
-            text: texte,
-
-            reply_markup: boutons,
-
-            disable_web_page_preview: true
-
-          })
-
-        }
-      );
-
-
-      const messageResult =
-        await messageResponse.json();
-
-
-      if (!messageResult.ok) {
-
-        console.error(
-          "Erreur message Telegram :",
-          messageResult
-        );
-
-      } else {
-
-        console.log(
-          "Message + boutons envoyés ✅"
-        );
-
+    ],
+    [
+      {
+        text: "⭐ Avis",
+        url: AVIS_URL
+      },
+      {
+        text: "📞 Contact",
+        url: CONTACT_URL
       }
+    ],
+    [
+      {
+        text: "📢 New Canal",
+        url: NEW_CANAL_URL
+      },
+      {
+        text: "🟢 WhatsApp",
+        url: WHATSAPP_URL
+      }
+    ],
+    [
+      {
+        text: "🏪 Boutique 🥼",
+        web_app: {
+          url: BOUTIQUE_URL
+        }
+      }
+    ]
+  ]
+};
 
-    }
+// ========================================
+// APPELS TELEGRAM
+// ========================================
 
-  } catch (error) {
-
-    console.error(
-      "Erreur webhook :",
-      error
-    );
-
+async function telegram(method, body) {
+  if (!TOKEN) {
+    throw new Error("BOT_TOKEN est manquant sur Render.");
   }
 
+  const response = await fetch(
+    `https://api.telegram.org/bot${TOKEN}/${method}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    }
+  );
 
-  res.sendStatus(200);
+  const result = await response.json();
 
+  if (!result.ok) {
+    throw new Error(
+      `Telegram ${method} : ${result.description || "erreur inconnue"}`
+    );
+  }
+
+  return result;
+}
+
+// ========================================
+// ENVOI DE LA NOUVELLE PHOTO
+// ========================================
+
+async function envoyerPhoto(chatId) {
+  if (!fs.existsSync(PHOTO_PATH)) {
+    throw new Error(
+      "Image introuvable : ajoute accueil.jpg à côté de index.js."
+    );
+  }
+
+  const image = await fs.promises.readFile(PHOTO_PATH);
+
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("caption", "⭐️ Doctor Pharma 33 ⭐️");
+  form.append(
+    "photo",
+    new Blob([image], { type: "image/jpeg" }),
+    "accueil.jpg"
+  );
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${TOKEN}/sendPhoto`,
+    {
+      method: "POST",
+      body: form
+    }
+  );
+
+  const result = await response.json();
+
+  if (!result.ok) {
+    throw new Error(
+      `Photo Telegram : ${result.description || "erreur inconnue"}`
+    );
+  }
+
+  console.log("Nouvelle photo envoyée ✅");
+}
+
+// ========================================
+// PAGE TEST
+// ========================================
+
+app.get("/", (req, res) => {
+  res.send("Serveur Doctor Pharma 33 actif ✅");
 });
 
+// ========================================
+// WEBHOOK TELEGRAM
+// ========================================
+
+app.post("/webhook", async (req, res) => {
+  const message = req.body.message;
+
+  if (
+    !message ||
+    typeof message.text !== "string" ||
+    !/^\/start(?:@\w+)?(?:\s|$)/i.test(message.text)
+  ) {
+    return res.sendStatus(200);
+  }
+
+  const chatId = message.chat.id;
+
+  console.log("Commande /start reçue ✅");
+
+  try {
+    await envoyerPhoto(chatId);
+  } catch (error) {
+    console.error("Erreur photo :", error.message);
+  }
+
+  try {
+    await telegram("sendMessage", {
+      chat_id: chatId,
+      text: TEXTE,
+      reply_markup: BOUTONS,
+      disable_web_page_preview: true
+    });
+
+    console.log("Message et boutons envoyés ✅");
+  } catch (error) {
+    console.error("Erreur message :", error.message);
+  }
+
+  return res.sendStatus(200);
+});
 
 // ========================================
 // CONFIGURATION WEBHOOK
 // ========================================
 
+async function configurerWebhook() {
+  return telegram("setWebhook", {
+    url: `${BASE_URL}/webhook`,
+    allowed_updates: ["message"]
+  });
+}
+
 app.get("/setup-webhook", async (req, res) => {
-
   try {
-
-    const webhookUrl =
-      "https://doctor-pharma-bot-iyki.onrender.com/webhook";
-
-
-    const response = await fetch(
-      `https://api.telegram.org/bot${TOKEN}/setWebhook`,
-      {
-
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-
-          url: webhookUrl
-
-        })
-
-      }
-    );
-
-
-    const result =
-      await response.json();
-
-
+    const result = await configurerWebhook();
     res.json(result);
-
   } catch (error) {
-
-    console.error(error);
+    console.error("Erreur webhook :", error.message);
 
     res.status(500).json({
-
-      error:
-        "Erreur configuration webhook"
-
+      ok: false,
+      error: error.message
     });
-
   }
-
 });
 
-
 // ========================================
-// DÉMARRAGE SERVEUR
+// DÉMARRAGE
 // ========================================
 
-const PORT =
-  process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
+app.listen(PORT, async () => {
+  console.log(`Serveur démarré sur le port ${PORT}`);
 
-app.listen(PORT, () => {
+  try {
+    const result = await telegram("getMe", {});
 
-  console.log(
-    `Bot démarré sur le port ${PORT}`
-  );
+    console.log(
+      `Bot connecté : @${result.result.username} ✅`
+    );
 
+    await configurerWebhook();
+
+    console.log("Webhook configuré automatiquement ✅");
+  } catch (error) {
+    console.error("Erreur au démarrage :", error.message);
+  }
 });
