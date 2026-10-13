@@ -36,19 +36,31 @@ const WEBHOOK_SECRET = crypto
   .digest("hex");
 
 // ========================================
-// TEXTE D'ACCUEIL
+// MESSAGE D'ACCUEIL EN GRAS
 // ========================================
 
-const TEXTE = `⛰️⭐️BIENVENUE CHEZ DOCTOR PHARMA 33⭐️⛰️
+const TEXTE = `<b>Bienvenue 👋
+⭐️ Doctor Pharma 33 ⭐️🏥
+🇫🇷 Saison 2026-2027 🇫🇷
 
-🏪La pharmacie bordelaise est enfin disponible sur Telegram ! 🏪🔥
+🏥 La Pharmacie Bordelaise et enfin disponible sur telegram ! 🏪🔥
 
-💎 Premium quality : ✅
-📞Service Client : Une équipe réactive et à l’écoute ✅
 
-👇 Accède au menu en cliquant sur le bouton boutique 📲
+⚡ Une équipe réactive et à ecoute🧏🏻‍♂️
+📦 Livraison rapide  🔥
+⭐️ Qualité assurée !!! 🤝
+💯 promotion tout les samedi 📆
 
-⚠️Important : Appuie sur /start pour actualiser le menu et profiter pleinement des dernières mises à jour de la mini app.`;
+
+👇Appuie sur le bouton boutique pour découvrir le menu 🫵
+
+
+🚨 Rappel : 🚨
+🔄 /START pour actualiser le bot
+Et profiter pleinement des
+Dernières mises à jours 🔥
+
+📲 @Doctor_commande33k</b>`;
 
 // ========================================
 // BOUTONS
@@ -376,7 +388,6 @@ async function traiter(message) {
     .match(/^\/(\w+)(?:@\w+)?(?:\s|$)/)?.[1]
     ?.toLowerCase();
 
-  // /START : sauvegarde + photo + accueil.
   if (command === "start") {
     try {
       await enregistrer(chatId);
@@ -405,6 +416,7 @@ async function traiter(message) {
     await telegram("sendMessage", {
       chat_id: chatId,
       text: TEXTE,
+      parse_mode: "HTML",
       reply_markup: BOUTONS,
       disable_web_page_preview: true
     });
@@ -412,7 +424,6 @@ async function traiter(message) {
     return;
   }
 
-  // /STOP reste disponible.
   if (command === "stop") {
     optOut.add(String(chatId));
 
