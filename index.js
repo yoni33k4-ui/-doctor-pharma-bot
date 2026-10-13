@@ -87,7 +87,7 @@ const BOUTONS = {
     [
       {
         text: "📢 New Canal",
-        url: "https://t.me/+MIB2qImNuyQ0OWY0"
+        url: "https://t.me/Doctor_Pharma33"
       },
       {
         text: "🟢 WhatsApp",
