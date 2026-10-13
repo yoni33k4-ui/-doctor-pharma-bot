@@ -140,7 +140,7 @@ const dire = (chatId, text) =>
   });
 
 // ========================================
-// BASE DE DONNÉES SUPABASE
+// SUPABASE
 // ========================================
 
 async function db(
@@ -243,10 +243,9 @@ let brouillon = null;
 let diffusionEnCours = false;
 
 const optOut = new Set();
+const updatesVus = new Set();
 
 let fileMessages = Promise.resolve();
-
-const updatesVus = new Set();
 
 async function diffuser(draft) {
   let sent = 0;
@@ -318,7 +317,6 @@ async function diffuser(draft) {
             await desactiver(chatId);
           }
         } else {
-          // Envoi peut-être reçu : éviter un doublon.
           unknown++;
         }
       }
@@ -355,7 +353,7 @@ Ne relance pas à tous : certains ont déjà reçu la vidéo. Vérifie Render/Su
 }
 
 // ========================================
-// COMMANDES DU BOT
+// COMMANDES
 // ========================================
 
 async function traiter(message) {
@@ -378,7 +376,7 @@ async function traiter(message) {
     .match(/^\/(\w+)(?:@\w+)?(?:\s|$)/)?.[1]
     ?.toLowerCase();
 
-  // /START : sauvegarde + accueil existant.
+  // /START : sauvegarde + photo + accueil.
   if (command === "start") {
     try {
       await enregistrer(chatId);
@@ -411,15 +409,10 @@ async function traiter(message) {
       disable_web_page_preview: true
     });
 
-    await dire(
-      chatId,
-      "Tu recevras aussi les nouveautés du bot. Pour ne plus les recevoir : /stop. Pour les réactiver : /start."
-    );
-
     return;
   }
 
-  // /STOP : désabonnement.
+  // /STOP reste disponible.
   if (command === "stop") {
     optOut.add(String(chatId));
 
@@ -433,7 +426,6 @@ async function traiter(message) {
     return;
   }
 
-  // /MONID : identifiant du compte.
   if (command === "monid") {
     await dire(
       chatId,
@@ -443,12 +435,11 @@ async function traiter(message) {
     return;
   }
 
-  // Toutes les commandes suivantes sont réservées à toi.
+  // Commandes suivantes réservées à ton compte.
   if (!admin) {
     return;
   }
 
-  // /STATS : nombre d'utilisateurs actifs.
   if (command === "stats") {
     const ids = await utilisateurs();
 
@@ -465,7 +456,6 @@ ${
     return;
   }
 
-  // /ANNULER : annule l'aperçu.
   if (command === "annuler") {
     brouillon = null;
 
@@ -477,7 +467,6 @@ ${
     return;
   }
 
-  // /DIFFUSER : à envoyer en réponse à une vidéo.
   if (command === "diffuser") {
     if (diffusionEnCours) {
       await dire(
@@ -546,7 +535,6 @@ Pour envoyer, écris :
     return;
   }
 
-  // /CONFIRMER CODE : lance la diffusion.
   if (command === "confirmer") {
     const code = text.trim().split(/\s+/)[1];
 
@@ -582,7 +570,6 @@ Pour envoyer, écris :
     return;
   }
 
-  // /AIDE : commandes administrateur.
   if (command === "aide") {
     await dire(
       chatId,
@@ -605,7 +592,7 @@ app.get("/", (_req, res) => {
 });
 
 // ========================================
-// WEBHOOK TELEGRAM PROTÉGÉ
+// WEBHOOK PROTÉGÉ
 // ========================================
 
 app.post("/webhook", (req, res) => {
@@ -673,7 +660,7 @@ app.post("/webhook", (req, res) => {
 });
 
 // ========================================
-// CONFIGURATION AUTOMATIQUE DU WEBHOOK
+// CONFIGURATION DU WEBHOOK
 // ========================================
 
 async function configurerWebhook() {
@@ -732,9 +719,7 @@ if (require.main === module) {
 
         await configurerWebhook();
 
-        console.log(
-          "Webhook configuré ✅"
-        );
+        console.log("Webhook configuré ✅");
       } catch (error) {
         console.error(
           "Configuration Telegram :",
@@ -749,9 +734,7 @@ if (require.main === module) {
           "bot_users?select=chat_id&limit=1"
         );
 
-        console.log(
-          "Supabase connecté ✅"
-        );
+        console.log("Supabase connecté ✅");
       } catch (error) {
         console.error(error.message);
       }
