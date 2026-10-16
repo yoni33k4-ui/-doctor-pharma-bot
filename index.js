@@ -7,16 +7,11 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const TOKEN = (process.env.BOT_TOKEN || "").trim();
-const SUPABASE_URL = (process.env.SUPABASE_URL || "")
-  .trim()
-  .replace(/\/$/, "");
-const SUPABASE_SECRET_KEY = (
-  process.env.SUPABASE_SECRET_KEY || ""
-).trim();
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
+const SUPABASE_SECRET_KEY = (process.env.SUPABASE_SECRET_KEY || "").trim();
 
 const ADMIN_ID = "8805663950";
 const BASE_URL = "https://doctor-pharma-bot-iyki.onrender.com";
-
 const PHOTO_NAME = "3168703F-5AD2-4B96-A901-3E86B0355FF8.png";
 const PHOTO_PATH = path.join(__dirname, PHOTO_NAME);
 
@@ -53,32 +48,38 @@ const BOUTONS = {
   inline_keyboard: [
     [
       {
+        style: "primary",
         text: "✈️ Tato Talk",
         url: "https://tato.im/doctorpharma33776"
       }
     ],
     [
       {
+        style: "primary",
         text: "⭐ Avis",
         url: "https://tato.im/doctoravis33"
       },
       {
+        style: "primary",
         text: "📞 Contact",
         url: "https://t.me/o_commande33k"
       }
     ],
     [
       {
+        style: "primary",
         text: "📢 New Canal",
         url: "https://t.me/Doctor_Pharma33"
       },
       {
+        style: "primary",
         text: "🟢 WhatsApp",
         url: "https://wa.me/33758106388"
       }
     ],
     [
       {
+        style: "success",
         text: "🏪 Boutique 🥼",
         web_app: {
           url: "https://layer-aligner.lovable.app"
@@ -91,24 +92,17 @@ const BOUTONS = {
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function telegram(method, body, multipart = false) {
-  const response = await fetch(
-    `https://api.telegram.org/bot${TOKEN}/${method}`,
-    {
-      method: "POST",
-      ...(multipart
-        ? {}
-        : { headers: { "Content-Type": "application/json" } }),
-      body: multipart ? body : JSON.stringify(body),
-      signal: AbortSignal.timeout(30000)
-    }
-  );
+  const response = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, {
+    method: "POST",
+    ...(multipart ? {} : { headers: { "Content-Type": "application/json" } }),
+    body: multipart ? body : JSON.stringify(body),
+    signal: AbortSignal.timeout(30000)
+  });
 
   const result = await response.json();
 
   if (!result.ok) {
-    const error = new Error(
-      `${method} : ${result.description || "Erreur Telegram"}`
-    );
+    const error = new Error(`${method} : ${result.description || "Erreur Telegram"}`);
     error.telegramCode = result.error_code;
     error.retryAfter = result.parameters?.retry_after;
     throw error;
@@ -120,25 +114,17 @@ async function telegram(method, body, multipart = false) {
 const dire = (chatId, text) =>
   telegram("sendMessage", { chat_id: chatId, text });
 
-async function db(
-  resource,
-  method = "GET",
-  body,
-  prefer = "return=minimal"
-) {
-  const response = await fetch(
-    `${SUPABASE_URL}/rest/v1/${resource}`,
-    {
-      method,
-      headers: {
-        apikey: SUPABASE_SECRET_KEY,
-        "Content-Type": "application/json",
-        Prefer: prefer
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(20000)
-    }
-  );
+async function db(resource, method = "GET", body, prefer = "return=minimal") {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${resource}`, {
+    method,
+    headers: {
+      apikey: SUPABASE_SECRET_KEY,
+      "Content-Type": "application/json",
+      Prefer: prefer
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    signal: AbortSignal.timeout(20000)
+  });
 
   if (!response.ok) {
     throw new Error(
@@ -160,11 +146,7 @@ async function enregistrer(chatId) {
 }
 
 async function desactiver(chatId) {
-  await db(
-    `bot_users?chat_id=eq.${chatId}`,
-    "PATCH",
-    { active: false }
-  );
+  await db(`bot_users?chat_id=eq.${chatId}`, "PATCH", { active: false });
 }
 
 async function utilisateurs() {
@@ -187,17 +169,14 @@ async function envoyerPhoto(chatId) {
 
   form.append("chat_id", String(chatId));
   form.append("caption", "⭐️ Doctor Pharma 33 ⭐️");
-  form.append(
-    "photo",
-    new Blob([image], { type: "image/png" }),
-    PHOTO_NAME
-  );
+  form.append("photo", new Blob([image], { type: "image/png" }), PHOTO_NAME);
 
   await telegram("sendPhoto", form, true);
 }
 
 let brouillon = null;
 let diffusionEnCours = false;
+
 const optOut = new Set();
 let fileMessages = Promise.resolve();
 const updatesVus = new Set();
@@ -215,15 +194,13 @@ async function diffuser(draft) {
     );
 
     for (const chatId of draft.ids) {
-      // Relire l'abonnement pour respecter /stop.
+      // Relire l'abonnement pour respecter /stop, même entre deux diffusions.
       if (optOut.has(String(chatId))) {
         skipped++;
         continue;
       }
 
-      const rows = await db(
-        `bot_users?select=active&chat_id=eq.${chatId}`
-      );
+      const rows = await db(`bot_users?select=active&chat_id=eq.${chatId}`);
 
       if (!rows[0]?.active || optOut.has(String(chatId))) {
         skipped++;
@@ -231,22 +208,19 @@ async function diffuser(draft) {
       }
 
       try {
-        // Réessayer uniquement un refus explicite 429.
+        // Réessayer uniquement un refus explicite 429, jamais un timeout incertain.
         for (let attempt = 0; ; attempt++) {
           try {
-            await telegram("sendVideo", {
+            await telegram(draft.method, {
               chat_id: chatId,
-              ...draft.video,
-              supports_streaming: true
+              ...draft.media
             });
 
             sent++;
             break;
           } catch (error) {
             if (error.telegramCode === 429 && attempt < 3) {
-              await wait(
-                (Number(error.retryAfter) || 5) * 1000 + 250
-              );
+              await wait((Number(error.retryAfter) || 5) * 1000 + 250);
 
               if (optOut.has(String(chatId))) {
                 skipped++;
@@ -267,7 +241,7 @@ async function diffuser(draft) {
             await desactiver(chatId);
           }
         } else {
-          // Éviter un second envoi si le premier a peut-être été reçu.
+          // Le message a peut-être été reçu : éviter un second envoi automatique.
           unknown++;
         }
       }
@@ -284,7 +258,7 @@ async function diffuser(draft) {
 
     await dire(
       ADMIN_ID,
-      `Diffusion interrompue.\nEnvoyés : ${sent}\nÉchecs : ${failed}\nNon confirmés : ${unknown}\nNe relance pas à tous : certains ont déjà reçu la vidéo. Vérifie Render/Supabase.`
+      `Diffusion interrompue.\nEnvoyés : ${sent}\nÉchecs : ${failed}\nNon confirmés : ${unknown}\nNe relance pas à tous : certains ont déjà reçu la publication. Vérifie Render/Supabase.`
     ).catch(() => {});
   } finally {
     diffusionEnCours = false;
@@ -292,18 +266,11 @@ async function diffuser(draft) {
 }
 
 async function traiter(message) {
-  if (
-    !message ||
-    message.chat?.type !== "private" ||
-    !message.from
-  ) {
-    return;
-  }
+  if (!message || message.chat?.type !== "private" || !message.from) return;
 
   const chatId = message.chat.id;
   const admin = String(message.from.id) === ADMIN_ID;
   const text = message.text || "";
-
   const command = text
     .match(/^\/(\w+)(?:@\w+)?(?:\s|$)/)?.[1]
     ?.toLowerCase();
@@ -357,10 +324,7 @@ async function traiter(message) {
   }
 
   if (command === "monid") {
-    await dire(
-      chatId,
-      `Ton identifiant Telegram : ${message.from.id}`
-    );
+    await dire(chatId, `Ton identifiant Telegram : ${message.from.id}`);
     return;
   }
 
@@ -392,49 +356,53 @@ async function traiter(message) {
     return;
   }
 
-  if (command === "diffuser") {
+  if (command === "diffuser" || command === "diffuserphoto") {
     if (diffusionEnCours) {
       await dire(chatId, "Une diffusion est déjà en cours.");
       return;
     }
 
     const source = message.reply_to_message;
+    const photo = command === "diffuserphoto";
 
-    if (!source?.video || source.media_group_id) {
+    if (!(photo ? source?.photo?.length : source?.video) || source.media_group_id) {
       await dire(
         chatId,
-        "Envoie une seule vidéo à ce bot avec ta description en légende. Réponds ensuite À CETTE VIDÉO avec /diffuser."
+        photo
+          ? "Envoie une seule image à ce bot en tant que PHOTO avec ta description en légende. Réponds ensuite À CETTE IMAGE avec /diffuserphoto. Les albums et fichiers ne sont pas acceptés."
+          : "Envoie une seule vidéo à ce bot avec ta description en légende. Réponds ensuite À CETTE VIDÉO avec /diffuser."
       );
+
       return;
     }
 
     const ids = await utilisateurs();
 
     if (!ids.length) {
-      await dire(
-        chatId,
-        "Aucun utilisateur enregistré. Fais /start pour tester."
-      );
+      await dire(chatId, "Aucun utilisateur enregistré. Fais /start pour tester.");
       return;
     }
 
-    const video = {
-      video: source.video.file_id,
+    const method = photo ? "sendPhoto" : "sendVideo";
+    const media = {
+      ...(photo
+        ? { photo: source.photo[source.photo.length - 1].file_id }
+        : { video: source.video.file_id, supports_streaming: true }),
       caption: source.caption || "",
       caption_entities: source.caption_entities || []
     };
 
-    await telegram("sendVideo", {
+    await telegram(method, {
       chat_id: chatId,
-      ...video,
-      supports_streaming: true
+      ...media
     });
 
     const code = crypto.randomBytes(3).toString("hex");
 
     brouillon = {
       ids,
-      video,
+      method,
+      media,
       code,
       expires: Date.now() + 10 * 60 * 1000
     };
@@ -455,15 +423,12 @@ async function traiter(message) {
       return;
     }
 
-    if (
-      !brouillon ||
-      brouillon.expires < Date.now() ||
-      code !== brouillon.code
-    ) {
+    if (!brouillon || brouillon.expires < Date.now() || code !== brouillon.code) {
       await dire(
         chatId,
-        "Confirmation invalide ou aperçu expiré. Réponds à ta vidéo avec /diffuser."
+        "Confirmation invalide ou aperçu expiré. Réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
       );
+
       return;
     }
 
@@ -478,19 +443,17 @@ async function traiter(message) {
   if (command === "aide") {
     await dire(
       chatId,
-      "/stats : nombre d'utilisateurs\n/monid : ton identifiant\n/diffuser : en réponse à une vidéo avec légende\n/confirmer CODE : envoyer l'aperçu\n/annuler : supprimer l'aperçu\n/stop : arrêter tes notifications"
+      "/stats : nombre d'utilisateurs\n/monid : ton identifiant\n/diffuser : en réponse à une vidéo avec légende\n/diffuserphoto : en réponse à une photo avec légende\n/confirmer CODE : envoyer l'aperçu\n/annuler : supprimer l'aperçu\n/stop : arrêter tes notifications"
     );
   }
 }
 
-app.get("/", (_req, res) => {
-  res.send("Serveur Doctor Pharma 33 actif ✅");
-});
+app.get("/", (_req, res) =>
+  res.send("Serveur Doctor Pharma 33 actif ✅")
+);
 
 app.post("/webhook", (req, res) => {
-  const secret =
-    req.get("X-Telegram-Bot-Api-Secret-Token") || "";
-
+  const secret = req.get("X-Telegram-Bot-Api-Secret-Token") || "";
   const received = Buffer.from(secret);
   const expected = Buffer.from(WEBHOOK_SECRET);
 
@@ -503,13 +466,8 @@ app.post("/webhook", (req, res) => {
 
   const id = req.body?.update_id;
 
-  if (!Number.isSafeInteger(id)) {
-    return res.sendStatus(400);
-  }
-
-  if (updatesVus.has(id)) {
-    return res.sendStatus(200);
-  }
+  if (!Number.isSafeInteger(id)) return res.sendStatus(400);
+  if (updatesVus.has(id)) return res.sendStatus(200);
 
   updatesVus.add(id);
 
@@ -517,7 +475,7 @@ app.post("/webhook", (req, res) => {
     updatesVus.delete(updatesVus.values().next().value);
   }
 
-  // Accusé de réception immédiat pour éviter les répétitions.
+  // Accusé de réception immédiat pour éviter les répétitions de Telegram.
   res.sendStatus(200);
 
   const message = req.body.message;
@@ -552,7 +510,7 @@ async function configurerWebhook() {
   });
 }
 
-// Configuration automatique du webhook au démarrage.
+// Configuration du webhook au démarrage.
 if (require.main === module) {
   if (!TOKEN || !SUPABASE_URL || !SUPABASE_SECRET_KEY) {
     throw new Error(
