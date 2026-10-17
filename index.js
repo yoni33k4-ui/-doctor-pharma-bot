@@ -69,7 +69,7 @@ const BOUTONS = {
       {
         style: "primary",
         text: "📢 New Canal",
-        url: "https://t.me/Doctor_Pharma33"
+        url: "https://t.me/+m304JfK-cfRiNmE0"
       },
       {
         style: "primary",
