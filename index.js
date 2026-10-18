@@ -65,7 +65,7 @@ const BOUTONS = {
       {
         style: "primary",
         text: "📞 Contact",
-        url: "https://t.me/Doctor_Commande33"
+        url: "https://t.me/Doctor_commande33k"
       }
     ],
     [
