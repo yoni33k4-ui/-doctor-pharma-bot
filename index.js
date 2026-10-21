@@ -7,9 +7,11 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const TOKEN = (process.env.BOT_TOKEN || "").trim();
+
 const SUPABASE_URL = (process.env.SUPABASE_URL || "")
   .trim()
   .replace(/\/$/, "");
+
 const SUPABASE_SECRET_KEY = (
   process.env.SUPABASE_SECRET_KEY || ""
 ).trim();
@@ -92,6 +94,24 @@ const BOUTONS = {
   ]
 };
 
+const MESSAGE_OUVERTURE = `Bonjour la team 🙋‍♂️👋
+Nous sommes ouverts 🏪
+Début des prises de commandes : 👇
+@Doctor_commande33k`;
+
+const BOUTON_OUVERTURE = {
+  inline_keyboard: [
+    [
+      {
+        text: "Ouvrir la boutique",
+        web_app: {
+          url: "https://layer-aligner.lovable.app"
+        }
+      }
+    ]
+  ]
+};
+
 const wait = ms =>
   new Promise(resolve => setTimeout(resolve, ms));
 
@@ -102,7 +122,11 @@ async function telegram(method, body, multipart = false) {
       method: "POST",
       ...(multipart
         ? {}
-        : { headers: { "Content-Type": "application/json" } }),
+        : {
+            headers: {
+              "Content-Type": "application/json"
+            }
+          }),
       body: multipart ? body : JSON.stringify(body),
       signal: AbortSignal.timeout(30000)
     }
@@ -114,8 +138,10 @@ async function telegram(method, body, multipart = false) {
     const error = new Error(
       `${method} : ${result.description || "Erreur Telegram"}`
     );
+
     error.telegramCode = result.error_code;
     error.retryAfter = result.parameters?.retry_after;
+
     throw error;
   }
 
@@ -123,7 +149,10 @@ async function telegram(method, body, multipart = false) {
 }
 
 const dire = (chatId, text) =>
-  telegram("sendMessage", { chat_id: chatId, text });
+  telegram("sendMessage", {
+    chat_id: chatId,
+    text
+  });
 
 async function db(
   resource,
@@ -142,7 +171,9 @@ async function db(
       },
       ...(body === undefined
         ? {}
-        : { body: JSON.stringify(body) }),
+        : {
+            body: JSON.stringify(body)
+          }),
       signal: AbortSignal.timeout(20000)
     }
   );
@@ -161,7 +192,10 @@ async function enregistrer(chatId) {
   await db(
     "bot_users?on_conflict=chat_id",
     "POST",
-    { chat_id: chatId, active: true },
+    {
+      chat_id: chatId,
+      active: true
+    },
     "resolution=merge-duplicates,return=minimal"
   );
 }
@@ -170,7 +204,9 @@ async function desactiver(chatId) {
   await db(
     `bot_users?chat_id=eq.${chatId}`,
     "PATCH",
-    { active: false }
+    {
+      active: false
+    }
   );
 }
 
@@ -181,8 +217,12 @@ async function utilisateurs() {
     const rows = await db(
       `bot_users?select=chat_id&active=eq.true&order=chat_id.asc&limit=500&offset=${offset}`
     );
+
     ids.push(...rows.map(row => row.chat_id));
-    if (rows.length < 500) return ids;
+
+    if (rows.length < 500) {
+      return ids;
+    }
   }
 }
 
@@ -192,6 +232,7 @@ async function envoyerPhoto(chatId) {
 
   form.append("chat_id", String(chatId));
   form.append("caption", "⭐️ Doctor Pharma 33 ⭐️");
+
   form.append(
     "photo",
     new Blob([image], { type: "image/png" }),
@@ -203,6 +244,7 @@ async function envoyerPhoto(chatId) {
 
 let brouillon = null;
 let diffusionEnCours = false;
+
 const optOut = new Set();
 let fileMessages = Promise.resolve();
 const updatesVus = new Set();
@@ -220,7 +262,7 @@ async function diffuser(draft) {
     );
 
     for (const chatId of draft.ids) {
-      // Respecter /stop, même entre deux diffusions.
+      // Respecter /stop avant chaque envoi.
       if (optOut.has(String(chatId))) {
         skipped++;
         continue;
@@ -243,10 +285,14 @@ async function diffuser(draft) {
               chat_id: chatId,
               ...draft.media
             });
+
             sent++;
             break;
           } catch (error) {
-            if (error.telegramCode === 429 && attempt < 3) {
+            if (
+              error.telegramCode === 429 &&
+              attempt < 3
+            ) {
               await wait(
                 (Number(error.retryAfter) || 5) * 1000 + 250
               );
@@ -265,11 +311,12 @@ async function diffuser(draft) {
       } catch (error) {
         if (error.telegramCode) {
           failed++;
+
           if (error.telegramCode === 403) {
             await desactiver(chatId);
           }
         } else {
-          // Éviter un second envoi après un timeout incertain.
+          // Ne pas réessayer après un timeout incertain.
           unknown++;
         }
       }
@@ -286,7 +333,10 @@ Envois non confirmés : ${unknown}
 Désabonnés ignorés : ${skipped}`
     );
   } catch (error) {
-    console.error("Diffusion interrompue :", error.message);
+    console.error(
+      "Diffusion interrompue :",
+      error.message
+    );
 
     await dire(
       ADMIN_ID,
@@ -313,6 +363,7 @@ async function traiter(message) {
   const chatId = message.chat.id;
   const admin = String(message.from.id) === ADMIN_ID;
   const text = message.text || "";
+
   const command = text
     .match(/^\/(\w+)(?:@\w+)?(?:\s|$)/)?.[1]
     ?.toLowerCase();
@@ -355,11 +406,14 @@ async function traiter(message) {
 
   if (command === "stop") {
     optOut.add(String(chatId));
+
     await desactiver(chatId);
+
     await dire(
       chatId,
       "Tu ne recevras plus les diffusions. /start pour les réactiver."
     );
+
     return;
   }
 
@@ -368,10 +422,70 @@ async function traiter(message) {
       chatId,
       `Ton identifiant Telegram : ${message.from.id}`
     );
+
     return;
   }
 
+  // Les commandes suivantes sont réservées à l'administrateur.
   if (!admin) return;
+
+  if (command === "ouverture") {
+    if (diffusionEnCours) {
+      await dire(
+        chatId,
+        "Une diffusion est déjà en cours."
+      );
+
+      return;
+    }
+
+    const ids = await utilisateurs();
+
+    if (!ids.length) {
+      await dire(
+        chatId,
+        "Aucun utilisateur actif enregistré. Fais /start pour tester."
+      );
+
+      return;
+    }
+
+    const media = {
+      text: MESSAGE_OUVERTURE,
+      reply_markup: BOUTON_OUVERTURE,
+      disable_web_page_preview: true
+    };
+
+    // Envoyer l'aperçu uniquement à l'administrateur.
+    await telegram("sendMessage", {
+      chat_id: chatId,
+      ...media
+    });
+
+    const code = crypto.randomBytes(3).toString("hex");
+
+    brouillon = {
+      ids,
+      method: "sendMessage",
+      media,
+      code,
+      expires: Date.now() + 10 * 60 * 1000
+    };
+
+    await dire(
+      chatId,
+      `Aperçu ci-dessus ✅
+Destinataires : ${ids.length}
+
+Pour envoyer à tous, écris :
+/confirmer ${code}
+
+/annuler pour annuler.
+Cet aperçu expire dans 10 minutes.`
+    );
+
+    return;
+  }
 
   if (command === "stats") {
     const ids = await utilisateurs();
@@ -391,16 +505,25 @@ ${
 
   if (command === "annuler") {
     brouillon = null;
+
     await dire(
       chatId,
       "Brouillon annulé. Une diffusion déjà lancée continue."
     );
+
     return;
   }
 
-  if (command === "diffuser" || command === "diffuserphoto") {
+  if (
+    command === "diffuser" ||
+    command === "diffuserphoto"
+  ) {
     if (diffusionEnCours) {
-      await dire(chatId, "Une diffusion est déjà en cours.");
+      await dire(
+        chatId,
+        "Une diffusion est déjà en cours."
+      );
+
       return;
     }
 
@@ -417,6 +540,7 @@ ${
           ? "Envoie une seule image à ce bot en tant que PHOTO avec ta description en légende. Réponds ensuite À CETTE IMAGE avec /diffuserphoto. Les albums et fichiers ne sont pas acceptés."
           : "Envoie une seule vidéo à ce bot avec ta description en légende. Réponds ensuite À CETTE VIDÉO avec /diffuser."
       );
+
       return;
     }
 
@@ -427,14 +551,17 @@ ${
         chatId,
         "Aucun utilisateur enregistré. Fais /start pour tester."
       );
+
       return;
     }
 
     const method = photo ? "sendPhoto" : "sendVideo";
+
     const media = {
       ...(photo
         ? {
-            photo: source.photo[source.photo.length - 1].file_id
+            photo:
+              source.photo[source.photo.length - 1].file_id
           }
         : {
             video: source.video.file_id,
@@ -444,7 +571,10 @@ ${
       caption_entities: source.caption_entities || []
     };
 
-    await telegram(method, { chat_id: chatId, ...media });
+    await telegram(method, {
+      chat_id: chatId,
+      ...media
+    });
 
     const code = crypto.randomBytes(3).toString("hex");
 
@@ -462,7 +592,8 @@ ${
 Pour envoyer, écris :
 /confirmer ${code}
 
-/annuler pour annuler. Cet aperçu expire dans 10 minutes.`
+/annuler pour annuler.
+Cet aperçu expire dans 10 minutes.`
     );
 
     return;
@@ -472,7 +603,11 @@ Pour envoyer, écris :
     const code = text.trim().split(/\s+/)[1];
 
     if (diffusionEnCours) {
-      await dire(chatId, "Une diffusion est déjà en cours.");
+      await dire(
+        chatId,
+        "Une diffusion est déjà en cours."
+      );
+
       return;
     }
 
@@ -483,28 +618,34 @@ Pour envoyer, écris :
     ) {
       await dire(
         chatId,
-        "Confirmation invalide ou aperçu expiré. Réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
+        "Confirmation invalide ou aperçu expiré. Utilise /ouverture, ou réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
       );
+
       return;
     }
 
     const draft = brouillon;
+
     brouillon = null;
     diffusionEnCours = true;
+
     void diffuser(draft);
+
     return;
   }
 
   if (command === "aide") {
     await dire(
       chatId,
-      `/stats : nombre d'utilisateurs
+      `/ouverture : préparer le message avec le bouton boutique
+/stats : nombre d'utilisateurs actifs
 /monid : ton identifiant
 /diffuser : en réponse à une vidéo avec légende
 /diffuserphoto : en réponse à une photo avec légende
-/confirmer CODE : envoyer l'aperçu
+/confirmer CODE : envoyer l'aperçu à tous
 /annuler : supprimer l'aperçu
-/stop : arrêter tes notifications`
+/stop : arrêter tes notifications
+/start : afficher le menu et réactiver tes notifications`
     );
   }
 }
@@ -540,7 +681,9 @@ app.post("/webhook", (req, res) => {
   updatesVus.add(id);
 
   if (updatesVus.size > 10000) {
-    updatesVus.delete(updatesVus.values().next().value);
+    updatesVus.delete(
+      updatesVus.values().next().value
+    );
   }
 
   // Répondre immédiatement pour éviter les répétitions.
@@ -558,7 +701,10 @@ app.post("/webhook", (req, res) => {
   fileMessages = fileMessages
     .then(() => traiter(message))
     .catch(error => {
-      console.error("Erreur traitement :", error.message);
+      console.error(
+        "Erreur traitement :",
+        error.message
+      );
 
       if (String(message?.from?.id) === ADMIN_ID) {
         return dire(
@@ -586,7 +732,9 @@ if (require.main === module) {
   }
 
   if (
-    !/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL)
+    !/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(
+      SUPABASE_URL
+    )
   ) {
     throw new Error(
       "SUPABASE_URL doit être l'adresse https://…supabase.co du projet."
@@ -604,17 +752,24 @@ if (require.main === module) {
 
     try {
       const me = await telegram("getMe", {});
+
       console.log(`Bot connecté : @${me.username}`);
 
       await configurerWebhook();
+
       console.log("Webhook configuré ✅");
     } catch (error) {
-      console.error("Configuration Telegram :", error.message);
+      console.error(
+        "Configuration Telegram :",
+        error.message
+      );
+
       process.exit(1);
     }
 
     try {
       await db("bot_users?select=chat_id&limit=1");
+
       console.log("Supabase connecté ✅");
     } catch (error) {
       console.error(error.message);
