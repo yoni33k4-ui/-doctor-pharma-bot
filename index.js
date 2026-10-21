@@ -99,6 +99,9 @@ Nous sommes ouverts 🏪
 Début des prises de commandes : 👇
 @Doctor_commande33k`;
 
+const MESSAGE_FERMETURE = `Bonne soirée la team 👋
+Nous sommes fermés, à demain !!! 🙏❌`;
+
 const BOUTON_OUVERTURE = {
   inline_keyboard: [
     [
@@ -429,7 +432,10 @@ async function traiter(message) {
   // Les commandes suivantes sont réservées à l'administrateur.
   if (!admin) return;
 
-  if (command === "ouverture") {
+  if (
+    command === "ouverture" ||
+    command === "fermeture"
+  ) {
     if (diffusionEnCours) {
       await dire(
         chatId,
@@ -450,11 +456,16 @@ async function traiter(message) {
       return;
     }
 
-    const media = {
-      text: MESSAGE_OUVERTURE,
-      reply_markup: BOUTON_OUVERTURE,
-      disable_web_page_preview: true
-    };
+    const media =
+      command === "ouverture"
+        ? {
+            text: MESSAGE_OUVERTURE,
+            reply_markup: BOUTON_OUVERTURE,
+            disable_web_page_preview: true
+          }
+        : {
+            text: MESSAGE_FERMETURE
+          };
 
     // Envoyer l'aperçu uniquement à l'administrateur.
     await telegram("sendMessage", {
@@ -618,7 +629,7 @@ Cet aperçu expire dans 10 minutes.`
     ) {
       await dire(
         chatId,
-        "Confirmation invalide ou aperçu expiré. Utilise /ouverture, ou réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
+        "Confirmation invalide ou aperçu expiré. Utilise /ouverture ou /fermeture, ou réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
       );
 
       return;
@@ -638,6 +649,7 @@ Cet aperçu expire dans 10 minutes.`
     await dire(
       chatId,
       `/ouverture : préparer le message avec le bouton boutique
+/fermeture : préparer le message de fermeture
 /stats : nombre d'utilisateurs actifs
 /monid : ton identifiant
 /diffuser : en réponse à une vidéo avec légende
