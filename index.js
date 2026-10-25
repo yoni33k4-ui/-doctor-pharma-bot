@@ -18,6 +18,7 @@ const SUPABASE_SECRET_KEY = (
 
 const ADMIN_ID = "8516075351";
 const BASE_URL = "https://doctor-pharma-bot-iyki.onrender.com";
+
 const PHOTO_NAME = "3168703F-5AD2-4B96-A901-3E86B0355FF8.png";
 const PHOTO_PATH = path.join(__dirname, PHOTO_NAME);
 
@@ -34,18 +35,11 @@ const TEXTE = `<b>Bienvenue 👋
 
 
 ⚡ Une équipe réactive et à ecoute🧏🏻‍♂️
-📦 Livraison rapide  🔥
 ⭐️ Qualité assurée !!! 🤝
-💯 promotion tout les samedi 📆
 
 
 👇Appuie sur le bouton boutique pour découvrir le menu 🫵
 
-
-🚨 Rappel : 🚨
-🔄 /START pour actualiser le bot
-Et profiter pleinement des
-Dernières mises à jours 🔥
 
 📲 @Doctor_commande33k</b>`;
 
@@ -94,29 +88,7 @@ const BOUTONS = {
   ]
 };
 
-const MESSAGE_OUVERTURE = `Bonjour la team 🙋‍♂️👋
-Nous sommes ouverts 🏪
-Début des prises de commandes : 👇
-@Doctor_commande33k`;
-
-const MESSAGE_FERMETURE = `Bonne soirée la team 👋
-Nous sommes fermés, à demain !!! 🙏❌`;
-
-const BOUTON_OUVERTURE = {
-  inline_keyboard: [
-    [
-      {
-        text: "Ouvrir la boutique",
-        web_app: {
-          url: "https://layer-aligner.lovable.app"
-        }
-      }
-    ]
-  ]
-};
-
-const wait = ms =>
-  new Promise(resolve => setTimeout(resolve, ms));
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function telegram(method, body, multipart = false) {
   const response = await fetch(
@@ -188,6 +160,7 @@ async function db(
   }
 
   const text = await response.text();
+
   return text ? JSON.parse(text) : null;
 }
 
@@ -229,16 +202,23 @@ async function utilisateurs() {
   }
 }
 
+// Envoie l'image, le texte de bienvenue et les boutons
+// ensemble dans un seul message Telegram.
 async function envoyerPhoto(chatId) {
   const image = await fs.promises.readFile(PHOTO_PATH);
+
   const form = new FormData();
 
   form.append("chat_id", String(chatId));
-  form.append("caption", "⭐️ Doctor Pharma 33 ⭐️");
+  form.append("caption", TEXTE);
+  form.append("parse_mode", "HTML");
+  form.append("reply_markup", JSON.stringify(BOUTONS));
 
   form.append(
     "photo",
-    new Blob([image], { type: "image/png" }),
+    new Blob([image], {
+      type: "image/png"
+    }),
     PHOTO_NAME
   );
 
@@ -246,11 +226,68 @@ async function envoyerPhoto(chatId) {
 }
 
 let brouillon = null;
+let attenteTexte = false;
 let diffusionEnCours = false;
 
 const optOut = new Set();
+
 let fileMessages = Promise.resolve();
+
 const updatesVus = new Set();
+
+async function preparerTexte(chatId, text, entities = []) {
+  if (!text.trim() || text.length > 4096) {
+    await dire(
+      chatId,
+      "Écris un message non vide de 4 096 caractères maximum, ou /annuler."
+    );
+    return;
+  }
+
+  const ids = await utilisateurs();
+
+  if (!ids.length) {
+    await dire(
+      chatId,
+      "Aucun destinataire actif. Les utilisateurs doivent faire /start pour s'inscrire."
+    );
+    return;
+  }
+
+  const media = {
+    text,
+    entities
+  };
+
+  await telegram("sendMessage", {
+    chat_id: chatId,
+    ...media
+  });
+
+  const code = crypto.randomBytes(3).toString("hex");
+
+  brouillon = {
+    ids,
+    method: "sendMessage",
+    media,
+    code,
+    expires: Date.now() + 10 * 60 * 1000
+  };
+
+  attenteTexte = false;
+
+  await dire(
+    chatId,
+    `Aperçu ci-dessus ✅
+Destinataires : ${ids.length}
+
+Pour envoyer à tous, écris :
+/confirmer ${code}
+
+/annuler pour annuler.
+Cet aperçu expire dans 10 minutes.`
+  );
+}
 
 async function diffuser(draft) {
   let sent = 0;
@@ -265,7 +302,6 @@ async function diffuser(draft) {
     );
 
     for (const chatId of draft.ids) {
-      // Respecter /stop avant chaque envoi.
       if (optOut.has(String(chatId))) {
         skipped++;
         continue;
@@ -282,6 +318,7 @@ async function diffuser(draft) {
 
       try {
         // Réessayer uniquement un refus explicite 429.
+        // Ne pas réessayer un timeout : le message a pu être reçu.
         for (let attempt = 0; ; attempt++) {
           try {
             await telegram(draft.method, {
@@ -292,10 +329,7 @@ async function diffuser(draft) {
             sent++;
             break;
           } catch (error) {
-            if (
-              error.telegramCode === 429 &&
-              attempt < 3
-            ) {
+            if (error.telegramCode === 429 && attempt < 3) {
               await wait(
                 (Number(error.retryAfter) || 5) * 1000 + 250
               );
@@ -319,7 +353,6 @@ async function diffuser(draft) {
             await desactiver(chatId);
           }
         } else {
-          // Ne pas réessayer après un timeout incertain.
           unknown++;
         }
       }
@@ -336,10 +369,7 @@ Envois non confirmés : ${unknown}
 Désabonnés ignorés : ${skipped}`
     );
   } catch (error) {
-    console.error(
-      "Diffusion interrompue :",
-      error.message
-    );
+    console.error("Diffusion interrompue :", error.message);
 
     await dire(
       ADMIN_ID,
@@ -386,23 +416,7 @@ async function traiter(message) {
       }
     }
 
-    try {
-      await envoyerPhoto(chatId);
-    } catch (error) {
-      console.error(
-        error.code === "ENOENT"
-          ? `Photo introuvable : ${PHOTO_NAME}`
-          : error.message
-      );
-    }
-
-    await telegram("sendMessage", {
-      chat_id: chatId,
-      text: TEXTE,
-      parse_mode: "HTML",
-      reply_markup: BOUTONS,
-      disable_web_page_preview: true
-    });
+    await envoyerPhoto(chatId);
 
     return;
   }
@@ -429,45 +443,139 @@ async function traiter(message) {
     return;
   }
 
-  // Les commandes suivantes sont réservées à l'administrateur.
-  if (!admin) return;
+  if (!admin) {
+    return;
+  }
 
-  if (
-    command === "ouverture" ||
-    command === "fermeture"
-  ) {
+  if (command === "reinitialiser") {
     if (diffusionEnCours) {
       await dire(
         chatId,
-        "Une diffusion est déjà en cours."
+        "Attends la fin de la diffusion avant de réinitialiser la liste."
       );
-
       return;
     }
+
+    attenteTexte = false;
+    brouillon = null;
+
+    const ids = await utilisateurs();
+    const code = crypto.randomBytes(3).toString("hex");
+
+    brouillon = {
+      type: "reset",
+      code,
+      expires: Date.now() + 10 * 60 * 1000
+    };
+
+    await dire(
+      chatId,
+      `Réinitialisation de la liste : ${ids.length} destinataire(s) actif(s).
+
+Tous les utilisateurs enregistrés dans bot_users seront supprimés de la liste. Chacun devra refaire /start pour être réinscrit. Les conversations Telegram restent intactes.
+
+Pour repartir de zéro :
+/confirmer ${code}
+
+/annuler pour annuler. Cette confirmation expire dans 10 minutes.`
+    );
+
+    return;
+  }
+
+  if (command === "ecrire") {
+    if (diffusionEnCours) {
+      await dire(chatId, "Une diffusion est déjà en cours.");
+      return;
+    }
+
+    brouillon = null;
+    attenteTexte = true;
+
+    const prefix =
+      text.match(/^\/ecrire(?:@\w+)?(?:\s+|$)/i)?.[0] || "";
+
+    const contenu = text.slice(prefix.length);
+
+    if (contenu.trim()) {
+      const entities = (message.entities || [])
+        .filter(entity => entity.offset >= prefix.length)
+        .map(entity => ({
+          ...entity,
+          offset: entity.offset - prefix.length
+        }));
+
+      await preparerTexte(chatId, contenu, entities);
+    } else {
+      await dire(
+        chatId,
+        "Écris maintenant le message à envoyer. Je te montrerai l'aperçu avant confirmation.\n\n/annuler pour annuler."
+      );
+    }
+
+    return;
+  }
+
+  if (attenteTexte && !command) {
+    if (diffusionEnCours) {
+      await dire(chatId, "Une diffusion est déjà en cours.");
+      return;
+    }
+
+    await preparerTexte(
+      chatId,
+      text,
+      message.entities || []
+    );
+
+    return;
+  }
+
+  if (command === "ouverture" || command === "fermeture") {
+    if (diffusionEnCours) {
+      await dire(chatId, "Une diffusion est déjà en cours.");
+      return;
+    }
+
+    attenteTexte = false;
+    brouillon = null;
 
     const ids = await utilisateurs();
 
     if (!ids.length) {
       await dire(
         chatId,
-        "Aucun utilisateur actif enregistré. Fais /start pour tester."
+        "Aucun utilisateur enregistré. Fais /start pour tester."
       );
-
       return;
     }
 
-    const media =
-      command === "ouverture"
-        ? {
-            text: MESSAGE_OUVERTURE,
-            reply_markup: BOUTON_OUVERTURE,
-            disable_web_page_preview: true
-          }
-        : {
-            text: MESSAGE_FERMETURE
-          };
+    const ouverture = command === "ouverture";
 
-    // Envoyer l'aperçu uniquement à l'administrateur.
+    const media = ouverture
+      ? {
+          text: `Bonjour la team 🙋‍♂️👋
+Nous sommes ouverts 🏪
+Début des prises de commandes : 👇
+@Doctor_commande33k`,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "Ouvrir la boutique",
+                  web_app: {
+                    url: "https://layer-aligner.lovable.app"
+                  }
+                }
+              ]
+            ]
+          }
+        }
+      : {
+          text: `Bonne soirée la team 👋
+Nous sommes fermés, à demain !!! 🙏❌`
+        };
+
     await telegram("sendMessage", {
       chat_id: chatId,
       ...media
@@ -516,6 +624,7 @@ ${
 
   if (command === "annuler") {
     brouillon = null;
+    attenteTexte = false;
 
     await dire(
       chatId,
@@ -525,18 +634,14 @@ ${
     return;
   }
 
-  if (
-    command === "diffuser" ||
-    command === "diffuserphoto"
-  ) {
+  if (command === "diffuser" || command === "diffuserphoto") {
     if (diffusionEnCours) {
-      await dire(
-        chatId,
-        "Une diffusion est déjà en cours."
-      );
-
+      await dire(chatId, "Une diffusion est déjà en cours.");
       return;
     }
+
+    attenteTexte = false;
+    brouillon = null;
 
     const source = message.reply_to_message;
     const photo = command === "diffuserphoto";
@@ -562,7 +667,6 @@ ${
         chatId,
         "Aucun utilisateur enregistré. Fais /start pour tester."
       );
-
       return;
     }
 
@@ -603,8 +707,7 @@ ${
 Pour envoyer, écris :
 /confirmer ${code}
 
-/annuler pour annuler.
-Cet aperçu expire dans 10 minutes.`
+/annuler pour annuler. Cet aperçu expire dans 10 minutes.`
     );
 
     return;
@@ -614,11 +717,7 @@ Cet aperçu expire dans 10 minutes.`
     const code = text.trim().split(/\s+/)[1];
 
     if (diffusionEnCours) {
-      await dire(
-        chatId,
-        "Une diffusion est déjà en cours."
-      );
-
+      await dire(chatId, "Une diffusion est déjà en cours.");
       return;
     }
 
@@ -629,15 +728,35 @@ Cet aperçu expire dans 10 minutes.`
     ) {
       await dire(
         chatId,
-        "Confirmation invalide ou aperçu expiré. Utilise /ouverture ou /fermeture, ou réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
+        "Confirmation invalide ou aperçu expiré. Utilise /ecrire, /ouverture, /fermeture ou /reinitialiser, ou réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
       );
-
       return;
     }
 
     const draft = brouillon;
 
     brouillon = null;
+    attenteTexte = false;
+
+    if (draft.type === "reset") {
+      await db(
+        "bot_users?chat_id=not.is.null",
+        "DELETE"
+      );
+
+      optOut.clear();
+
+      await dire(
+        chatId,
+        `Liste réinitialisée ✅
+Destinataires : 0
+Seuls ceux qui feront /start à partir de maintenant seront réinscrits.
+La liste ne sera pas vidée lors des redémarrages du serveur.`
+      );
+
+      return;
+    }
+
     diffusionEnCours = true;
 
     void diffuser(draft);
@@ -648,16 +767,17 @@ Cet aperçu expire dans 10 minutes.`
   if (command === "aide") {
     await dire(
       chatId,
-      `/ouverture : préparer le message avec le bouton boutique
+      `/ecrire : écrire un message libre, puis confirmer son envoi
+/ouverture : préparer le message d’ouverture
 /fermeture : préparer le message de fermeture
+/reinitialiser : vider la liste après confirmation
 /stats : nombre d'utilisateurs actifs
 /monid : ton identifiant
 /diffuser : en réponse à une vidéo avec légende
 /diffuserphoto : en réponse à une photo avec légende
-/confirmer CODE : envoyer l'aperçu à tous
-/annuler : supprimer l'aperçu
-/stop : arrêter tes notifications
-/start : afficher le menu et réactiver tes notifications`
+/confirmer CODE : confirmer l'action affichée
+/annuler : supprimer l'aperçu ou annuler la saisie
+/stop : arrêter tes notifications`
     );
   }
 }
@@ -693,12 +813,10 @@ app.post("/webhook", (req, res) => {
   updatesVus.add(id);
 
   if (updatesVus.size > 10000) {
-    updatesVus.delete(
-      updatesVus.values().next().value
-    );
+    updatesVus.delete(updatesVus.values().next().value);
   }
 
-  // Répondre immédiatement pour éviter les répétitions.
+  // Réponse immédiate pour éviter les répétitions de Telegram.
   res.sendStatus(200);
 
   const message = req.body.message;
@@ -713,10 +831,7 @@ app.post("/webhook", (req, res) => {
   fileMessages = fileMessages
     .then(() => traiter(message))
     .catch(error => {
-      console.error(
-        "Erreur traitement :",
-        error.message
-      );
+      console.error("Erreur traitement :", error.message);
 
       if (String(message?.from?.id) === ADMIN_ID) {
         return dire(
@@ -744,9 +859,7 @@ if (require.main === module) {
   }
 
   if (
-    !/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(
-      SUPABASE_URL
-    )
+    !/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL)
   ) {
     throw new Error(
       "SUPABASE_URL doit être l'adresse https://…supabase.co du projet."
