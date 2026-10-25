@@ -79,6 +79,18 @@ const BOUTONS = {
           url: "https://layer-aligner.lovable.app"
         }
       }
+    ],
+    [
+      {
+        text: "📢 Recevoir les annonces",
+        callback_data: "annonces_abonner"
+      }
+    ],
+    [
+      {
+        text: "🔕 Se désabonner",
+        callback_data: "annonces_desabonner"
+      }
     ]
   ]
 };
@@ -160,6 +172,7 @@ async function db(
   return text ? JSON.parse(text) : null;
 }
 
+// Appelée uniquement après un clic sur Recevoir les annonces.
 async function enregistrer(chatId) {
   await db(
     "bot_users?on_conflict=chat_id",
@@ -198,8 +211,7 @@ async function utilisateurs() {
   }
 }
 
-// Envoie l'image avec le texte de bienvenue
-// et les boutons dans un seul message.
+// Image + texte de bienvenue + boutons dans un seul message.
 async function envoyerPhoto(chatId) {
   const image = await fs.promises.readFile(PHOTO_PATH);
 
@@ -230,12 +242,75 @@ const updatesVus = new Set();
 
 let fileMessages = Promise.resolve();
 
+async function traiterCallback(query) {
+  const chat = query.message?.chat;
+
+  if (
+    !query.id ||
+    !query.from ||
+    chat?.type !== "private" ||
+    String(query.from.id) !== String(chat.id) ||
+    ![
+      "annonces_abonner",
+      "annonces_desabonner"
+    ].includes(query.data)
+  ) {
+    if (query.id) {
+      await telegram("answerCallbackQuery", {
+        callback_query_id: query.id
+      });
+    }
+
+    return;
+  }
+
+  const chatId = chat.id;
+  const abonner = query.data === "annonces_abonner";
+
+  if (!abonner) {
+    optOut.add(String(chatId));
+  }
+
+  // Fermer l'indicateur de chargement du bouton.
+  await telegram("answerCallbackQuery", {
+    callback_query_id: query.id
+  }).catch(() => {});
+
+  try {
+    if (abonner) {
+      await enregistrer(chatId);
+      optOut.delete(String(chatId));
+    } else {
+      await desactiver(chatId);
+    }
+  } catch (error) {
+    console.error("Erreur abonnement :", error.message);
+
+    await dire(
+      chatId,
+      abonner
+        ? "Impossible d'enregistrer ton abonnement pour le moment. Réessaie avec le bouton Recevoir les annonces."
+        : "Ton désabonnement n'a pas pu être enregistré. Réessaie avec Se désabonner ou /stop."
+    );
+
+    return;
+  }
+
+  await dire(
+    chatId,
+    abonner
+      ? "Abonnement confirmé ✅ Tu recevras les annonces de Doctor Pharma 33. Tu peux te désabonner avec le bouton Se désabonner ou /stop."
+      : "Désabonnement confirmé ✅ Tu ne recevras plus les annonces. L'accès à la boutique reste disponible."
+  );
+}
+
 async function preparerTexte(chatId, text, entities = []) {
   if (!text.trim() || text.length > 4096) {
     await dire(
       chatId,
       "Écris un message non vide de 4 096 caractères maximum, ou /annuler."
     );
+
     return;
   }
 
@@ -244,8 +319,9 @@ async function preparerTexte(chatId, text, entities = []) {
   if (!ids.length) {
     await dire(
       chatId,
-      "Aucun destinataire actif. Les utilisateurs doivent faire /start pour s'inscrire."
+      "Aucun abonné aux annonces. Les utilisateurs doivent appuyer sur Recevoir les annonces dans l'accueil."
     );
+
     return;
   }
 
@@ -297,6 +373,7 @@ async function diffuser(draft) {
     );
 
     for (const chatId of draft.ids) {
+      // Vérifier le désabonnement avant chaque envoi.
       if (optOut.has(String(chatId))) {
         skipped++;
         continue;
@@ -397,20 +474,7 @@ async function traiter(message) {
     ?.toLowerCase();
 
   if (command === "start") {
-    try {
-      await enregistrer(chatId);
-      optOut.delete(String(chatId));
-    } catch (error) {
-      console.error(error.message);
-
-      if (admin) {
-        await dire(
-          chatId,
-          "⚠️ Le menu fonctionne, mais la sauvegarde Supabase a échoué. Vérifie SUPABASE_URL, SUPABASE_SECRET_KEY et bot_users."
-        );
-      }
-    }
-
+    // /start ouvre l'accueil sans modifier l'abonnement.
     await envoyerPhoto(chatId);
 
     return;
@@ -423,7 +487,7 @@ async function traiter(message) {
 
     await dire(
       chatId,
-      "Tu ne recevras plus les diffusions. /start pour les réactiver."
+      "Tu ne recevras plus les annonces. Pour te réabonner, ouvre l'accueil avec /start puis appuie sur Recevoir les annonces."
     );
 
     return;
@@ -448,6 +512,7 @@ async function traiter(message) {
         chatId,
         "Attends la fin de la diffusion avant de réinitialiser la liste."
       );
+
       return;
     }
 
@@ -467,7 +532,7 @@ async function traiter(message) {
       chatId,
       `Réinitialisation de la liste : ${ids.length} destinataire(s) actif(s).
 
-Tous les utilisateurs enregistrés dans bot_users seront supprimés de la liste. Chacun devra refaire /start pour être réinscrit. Les conversations Telegram restent intactes.
+Tous les utilisateurs enregistrés dans bot_users seront supprimés de la liste. Chacun devra appuyer sur Recevoir les annonces pour se réabonner. Les conversations Telegram restent intactes.
 
 Pour repartir de zéro :
 /confirmer ${code}
@@ -540,8 +605,9 @@ Pour repartir de zéro :
     if (!ids.length) {
       await dire(
         chatId,
-        "Aucun utilisateur enregistré. Fais /start pour tester."
+        "Aucun abonné aux annonces. Fais /start puis appuie sur Recevoir les annonces pour tester."
       );
+
       return;
     }
 
@@ -606,7 +672,7 @@ Cet aperçu expire dans 10 minutes.`
 
     await dire(
       chatId,
-      `Utilisateurs enregistrés et actifs : ${ids.length}
+      `Abonnés aux annonces : ${ids.length}
 ${
   diffusionEnCours
     ? "Une diffusion est en cours."
@@ -660,8 +726,9 @@ ${
     if (!ids.length) {
       await dire(
         chatId,
-        "Aucun utilisateur enregistré. Fais /start pour tester."
+        "Aucun abonné aux annonces. Fais /start puis appuie sur Recevoir les annonces pour tester."
       );
+
       return;
     }
 
@@ -725,6 +792,7 @@ Pour envoyer, écris :
         chatId,
         "Confirmation invalide ou aperçu expiré. Utilise /ecrire, /ouverture, /fermeture ou /reinitialiser, ou réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
       );
+
       return;
     }
 
@@ -745,7 +813,7 @@ Pour envoyer, écris :
         chatId,
         `Liste réinitialisée ✅
 Destinataires : 0
-Seuls ceux qui feront /start à partir de maintenant seront réinscrits.
+Seuls ceux qui appuieront sur Recevoir les annonces seront inscrits. /start ouvre uniquement l'accueil.
 La liste ne sera pas vidée lors des redémarrages du serveur.`
       );
 
@@ -815,7 +883,10 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 
   const message = req.body.message;
+  const callback = req.body.callback_query;
 
+  // Prendre en compte /stop immédiatement,
+  // même si d'autres messages attendent leur traitement.
   if (
     message?.chat?.type === "private" &&
     /^\/stop(?:@\w+)?(?:\s|$)/i.test(message.text || "")
@@ -823,12 +894,30 @@ app.post("/webhook", (req, res) => {
     optOut.add(String(message.chat.id));
   }
 
+  // Prendre en compte immédiatement le bouton de désabonnement.
+  if (
+    callback?.data === "annonces_desabonner" &&
+    callback.message?.chat?.type === "private" &&
+    String(callback.from?.id) ===
+      String(callback.message.chat.id)
+  ) {
+    optOut.add(String(callback.from.id));
+  }
+
   fileMessages = fileMessages
-    .then(() => traiter(message))
+    .then(() =>
+      callback
+        ? traiterCallback(callback)
+        : traiter(message)
+    )
     .catch(error => {
       console.error("Erreur traitement :", error.message);
 
-      if (String(message?.from?.id) === ADMIN_ID) {
+      if (
+        String(
+          message?.from?.id || callback?.from?.id
+        ) === ADMIN_ID
+      ) {
         return dire(
           ADMIN_ID,
           "Une erreur est survenue. Consulte les logs Render et vérifie Supabase."
@@ -841,7 +930,10 @@ async function configurerWebhook() {
   await telegram("setWebhook", {
     url: `${BASE_URL}/webhook`,
     secret_token: WEBHOOK_SECRET,
-    allowed_updates: ["message"],
+    allowed_updates: [
+      "message",
+      "callback_query"
+    ],
     max_connections: 1
   });
 }
@@ -900,6 +992,7 @@ if (require.main === module) {
 module.exports = {
   app,
   traiter,
+  traiterCallback,
   utilisateurs,
   telegram,
   db,
