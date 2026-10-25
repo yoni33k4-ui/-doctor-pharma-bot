@@ -27,19 +27,14 @@ const WEBHOOK_SECRET = crypto
   .update("doctor-pharma-webhook-v1")
   .digest("hex");
 
-const TEXTE = `<b>Bienvenue 👋
-⭐️ Doctor Pharma 33 ⭐️🏥
-🇫🇷 Saison 2026-2027 🇫🇷
+const TEXTE = `<b>Bienvenue chez Doctor Pharma 33 👋🇫🇷
 
-🏥 La Pharmacie Bordelaise et enfin disponible sur telegram ! 🏪🔥
-
+Les références du Doctor sont enfin disponibles sur Telegram ! 🔥
 
 ⚡ Une équipe réactive et à ecoute🧏🏻‍♂️
 ⭐️ Qualité assurée !!! 🤝
 
-
 👇Appuie sur le bouton boutique pour découvrir le menu 🫵
-
 
 📲 @Doctor_commande33k</b>`;
 
@@ -88,7 +83,8 @@ const BOUTONS = {
   ]
 };
 
-const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+const wait = ms =>
+  new Promise(resolve => setTimeout(resolve, ms));
 
 async function telegram(method, body, multipart = false) {
   const response = await fetch(
@@ -202,8 +198,8 @@ async function utilisateurs() {
   }
 }
 
-// Envoie l'image, le texte de bienvenue et les boutons
-// ensemble dans un seul message Telegram.
+// Envoie l'image avec le texte de bienvenue
+// et les boutons dans un seul message.
 async function envoyerPhoto(chatId) {
   const image = await fs.promises.readFile(PHOTO_PATH);
 
@@ -230,10 +226,9 @@ let attenteTexte = false;
 let diffusionEnCours = false;
 
 const optOut = new Set();
+const updatesVus = new Set();
 
 let fileMessages = Promise.resolve();
-
-const updatesVus = new Set();
 
 async function preparerTexte(chatId, text, entities = []) {
   if (!text.trim() || text.length > 4096) {
@@ -318,7 +313,7 @@ async function diffuser(draft) {
 
       try {
         // Réessayer uniquement un refus explicite 429.
-        // Ne pas réessayer un timeout : le message a pu être reçu.
+        // Un timeout peut concerner un message déjà reçu.
         for (let attempt = 0; ; attempt++) {
           try {
             await telegram(draft.method, {
