@@ -1,3 +1,4 @@
+
 const express = require("express");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -7,19 +8,19 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const TOKEN = (process.env.BOT_TOKEN || "").trim();
-
 const SUPABASE_URL = (process.env.SUPABASE_URL || "")
   .trim()
   .replace(/\/$/, "");
-
 const SUPABASE_SECRET_KEY = (
   process.env.SUPABASE_SECRET_KEY || ""
 ).trim();
 
 const ADMIN_ID = "8516075351";
-const BASE_URL = "https://doctor-pharma-bot-iyki.onrender.com";
+const BASE_URL =
+  "https://doctor-pharma-bot-iyki.onrender.com";
 
-const PHOTO_NAME = "3168703F-5AD2-4B96-A901-3E86B0355FF8.png";
+const PHOTO_NAME =
+  "3168703F-5AD2-4B96-A901-3E86B0355FF8.png";
 const PHOTO_PATH = path.join(__dirname, PHOTO_NAME);
 
 const WEBHOOK_SECRET = crypto
@@ -79,20 +80,16 @@ const BOUTONS = {
           url: "https://layer-aligner.lovable.app"
         }
       }
-    ],
-    [
-      {
-        text: "📢 Recevoir les annonces",
-        callback_data: "annonces_abonner"
-      }
-    ],
-    [
-      {
-        text: "🔕 Se désabonner",
-        callback_data: "annonces_desabonner"
-      }
     ]
   ]
+};
+
+const CLAVIER_ACCUEIL = {
+  keyboard: [
+    [{ text: "🏠 ACCUEIL" }]
+  ],
+  resize_keyboard: true,
+  is_persistent: true
 };
 
 const wait = ms =>
@@ -119,22 +116,24 @@ async function telegram(method, body, multipart = false) {
 
   if (!result.ok) {
     const error = new Error(
-      `${method} : ${result.description || "Erreur Telegram"}`
+      `${method} : ${
+        result.description || "Erreur Telegram"
+      }`
     );
 
     error.telegramCode = result.error_code;
     error.retryAfter = result.parameters?.retry_after;
-
     throw error;
   }
 
   return result.result;
 }
 
-const dire = (chatId, text) =>
+const dire = (chatId, text, extra = {}) =>
   telegram("sendMessage", {
     chat_id: chatId,
-    text
+    text,
+    ...extra
   });
 
 async function db(
@@ -149,72 +148,104 @@ async function db(
       method,
       headers: {
         apikey: SUPABASE_SECRET_KEY,
+        Authorization:
+          `Bearer ${SUPABASE_SECRET_KEY}`,
         "Content-Type": "application/json",
         Prefer: prefer
       },
       ...(body === undefined
         ? {}
-        : {
-            body: JSON.stringify(body)
-          }),
+        : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(20000)
     }
   );
 
   if (!response.ok) {
+    const detail = await response.text();
+
     throw new Error(
-      `Supabase : HTTP ${response.status}. Vérifie l'URL, la clé secrète et la table bot_users.`
+      `Supabase HTTP ${response.status}: ${detail}`
     );
   }
 
   const text = await response.text();
-
   return text ? JSON.parse(text) : null;
 }
 
-// Appelée uniquement après un clic sur Recevoir les annonces.
-async function enregistrer(chatId) {
-  await db(
-    "bot_users?on_conflict=chat_id",
-    "POST",
-    {
-      chat_id: chatId,
-      active: true
-    },
-    "resolution=merge-duplicates,return=minimal"
+// Enregistre l'utilisateur sans modifier
+// son choix concernant les annonces.
+async function enregistrerUtilisateur(message) {
+  const chatId = message.chat.id;
+  const user = message.from;
+
+  const rows = await db(
+    `bot_users?select=chat_id&chat_id=eq.${chatId}`
   );
+
+  const profil = {
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    username: user.username || null
+  };
+
+  if (rows.length) {
+    await db(
+      `bot_users?chat_id=eq.${chatId}`,
+      "PATCH",
+      profil
+    );
+  } else {
+    await db(
+      "bot_users",
+      "POST",
+      {
+        chat_id: chatId,
+        ...profil,
+        active: false
+      }
+    );
+  }
 }
 
-async function desactiver(chatId) {
+async function modifierAnnonces(chatId, active) {
   await db(
     `bot_users?chat_id=eq.${chatId}`,
     "PATCH",
-    {
-      active: false
-    }
+    { active }
   );
 }
 
-async function utilisateurs() {
-  const ids = [];
+async function obtenirUtilisateurs(actifsSeulement = false) {
+  const resultats = [];
 
   for (let offset = 0; ; offset += 500) {
+    const filtre = actifsSeulement
+      ? "&active=eq.true"
+      : "";
+
     const rows = await db(
-      `bot_users?select=chat_id&active=eq.true&order=chat_id.asc&limit=500&offset=${offset}`
+      "bot_users?select=chat_id,first_name," +
+      "last_name,username,active" +
+      filtre +
+      `&order=chat_id.asc&limit=500&offset=${offset}`
     );
 
-    ids.push(...rows.map(row => row.chat_id));
+    resultats.push(...rows);
 
     if (rows.length < 500) {
-      return ids;
+      return resultats;
     }
   }
 }
 
-// Image + texte de bienvenue + boutons dans un seul message.
+async function utilisateurs() {
+  const rows = await obtenirUtilisateurs(true);
+  return rows.map(row => row.chat_id);
+}
+
+// Image et boutons habituels.
 async function envoyerPhoto(chatId) {
   const image = await fs.promises.readFile(PHOTO_PATH);
-
   const form = new FormData();
 
   form.append("chat_id", String(chatId));
@@ -224,13 +255,22 @@ async function envoyerPhoto(chatId) {
 
   form.append(
     "photo",
-    new Blob([image], {
-      type: "image/png"
-    }),
+    new Blob([image], { type: "image/png" }),
     PHOTO_NAME
   );
 
   await telegram("sendPhoto", form, true);
+}
+
+// Affiche le bouton gris fixe et l'accueil.
+async function afficherAccueil(chatId) {
+  await dire(
+    chatId,
+    "🏠 Accueil Doctor Pharma 33",
+    { reply_markup: CLAVIER_ACCUEIL }
+  );
+
+  await envoyerPhoto(chatId);
 }
 
 let brouillon = null;
@@ -242,75 +282,73 @@ const updatesVus = new Set();
 
 let fileMessages = Promise.resolve();
 
-async function traiterCallback(query) {
-  const chat = query.message?.chat;
+async function ficheStats(chatId) {
+  const rows = await obtenirUtilisateurs();
 
-  if (
-    !query.id ||
-    !query.from ||
-    chat?.type !== "private" ||
-    String(query.from.id) !== String(chat.id) ||
-    ![
-      "annonces_abonner",
-      "annonces_desabonner"
-    ].includes(query.data)
-  ) {
-    if (query.id) {
-      await telegram("answerCallbackQuery", {
-        callback_query_id: query.id
-      });
+  const actifs = rows.filter(row => row.active);
+
+  let texte = `📊 DOCTOR PHARMA 33 — STATISTIQUES
+
+👥 Utilisateurs enregistrés : ${rows.length}
+📢 Abonnés aux annonces : ${actifs.length}
+🔕 Sans abonnement : ${rows.length - actifs.length}
+
+📋 LISTE DES UTILISATEURS
+
+`;
+
+  if (!rows.length) {
+    texte += "Aucun utilisateur enregistré.";
+  } else {
+    rows.forEach((row, index) => {
+      const nom = [
+        row.first_name,
+        row.last_name
+      ].filter(Boolean).join(" ") || "Sans nom";
+
+      const pseudo = row.username
+        ? ` (@${row.username})`
+        : "";
+
+      texte += `${index + 1}. ${nom}${pseudo}\n`;
+      texte += `ID : ${row.chat_id}\n`;
+      texte += row.active
+        ? "Annonces : activées ✅\n\n"
+        : "Annonces : désactivées 🔕\n\n";
+    });
+  }
+
+  texte += diffusionEnCours
+    ? "📤 Une diffusion est en cours."
+    : "✅ Aucune diffusion en cours.";
+
+  // Telegram limite les messages à 4096 caractères.
+  // Découpage sans perdre les utilisateurs.
+  const lignes = texte.split("\n");
+  let partie = "";
+
+  for (const ligne of lignes) {
+    if (
+      partie.length + ligne.length + 1 > 3900
+    ) {
+      await dire(chatId, partie);
+      partie = "";
     }
 
-    return;
+    partie += ligne + "\n";
   }
 
-  const chatId = chat.id;
-  const abonner = query.data === "annonces_abonner";
-
-  if (!abonner) {
-    optOut.add(String(chatId));
+  if (partie.trim()) {
+    await dire(chatId, partie);
   }
-
-  // Fermer l'indicateur de chargement du bouton.
-  await telegram("answerCallbackQuery", {
-    callback_query_id: query.id
-  }).catch(() => {});
-
-  try {
-    if (abonner) {
-      await enregistrer(chatId);
-      optOut.delete(String(chatId));
-    } else {
-      await desactiver(chatId);
-    }
-  } catch (error) {
-    console.error("Erreur abonnement :", error.message);
-
-    await dire(
-      chatId,
-      abonner
-        ? "Impossible d'enregistrer ton abonnement pour le moment. Réessaie avec le bouton Recevoir les annonces."
-        : "Ton désabonnement n'a pas pu être enregistré. Réessaie avec Se désabonner ou /stop."
-    );
-
-    return;
-  }
-
-  await dire(
-    chatId,
-    abonner
-      ? "Abonnement confirmé ✅ Tu recevras les annonces de Doctor Pharma 33. Tu peux te désabonner avec le bouton Se désabonner ou /stop."
-      : "Désabonnement confirmé ✅ Tu ne recevras plus les annonces. L'accès à la boutique reste disponible."
-  );
 }
 
 async function preparerTexte(chatId, text, entities = []) {
   if (!text.trim() || text.length > 4096) {
     await dire(
       chatId,
-      "Écris un message non vide de 4 096 caractères maximum, ou /annuler."
+      "Écris un message de 4 096 caractères maximum, ou /annuler."
     );
-
     return;
   }
 
@@ -319,16 +357,12 @@ async function preparerTexte(chatId, text, entities = []) {
   if (!ids.length) {
     await dire(
       chatId,
-      "Aucun abonné aux annonces. Les utilisateurs doivent appuyer sur Recevoir les annonces dans l'accueil."
+      "Aucun abonné aux annonces pour le moment."
     );
-
     return;
   }
 
-  const media = {
-    text,
-    entities
-  };
+  const media = { text, entities };
 
   await telegram("sendMessage", {
     chat_id: chatId,
@@ -352,11 +386,12 @@ async function preparerTexte(chatId, text, entities = []) {
     `Aperçu ci-dessus ✅
 Destinataires : ${ids.length}
 
-Pour envoyer à tous, écris :
+Pour envoyer à tous :
 /confirmer ${code}
 
-/annuler pour annuler.
-Cet aperçu expire dans 10 minutes.`
+Pour annuler : /annuler
+
+L'aperçu expire dans 10 minutes.`
   );
 }
 
@@ -373,7 +408,6 @@ async function diffuser(draft) {
     );
 
     for (const chatId of draft.ids) {
-      // Vérifier le désabonnement avant chaque envoi.
       if (optOut.has(String(chatId))) {
         skipped++;
         continue;
@@ -383,14 +417,15 @@ async function diffuser(draft) {
         `bot_users?select=active&chat_id=eq.${chatId}`
       );
 
-      if (!rows[0]?.active || optOut.has(String(chatId))) {
+      if (
+        !rows[0]?.active ||
+        optOut.has(String(chatId))
+      ) {
         skipped++;
         continue;
       }
 
       try {
-        // Réessayer uniquement un refus explicite 429.
-        // Un timeout peut concerner un message déjà reçu.
         for (let attempt = 0; ; attempt++) {
           try {
             await telegram(draft.method, {
@@ -401,9 +436,13 @@ async function diffuser(draft) {
             sent++;
             break;
           } catch (error) {
-            if (error.telegramCode === 429 && attempt < 3) {
+            if (
+              error.telegramCode === 429 &&
+              attempt < 3
+            ) {
               await wait(
-                (Number(error.retryAfter) || 5) * 1000 + 250
+                (Number(error.retryAfter) || 5) *
+                  1000 + 250
               );
 
               if (optOut.has(String(chatId))) {
@@ -422,7 +461,8 @@ async function diffuser(draft) {
           failed++;
 
           if (error.telegramCode === 403) {
-            await desactiver(chatId);
+            await modifierAnnonces(chatId, false)
+              .catch(() => {});
           }
         } else {
           unknown++;
@@ -435,21 +475,28 @@ async function diffuser(draft) {
     await dire(
       ADMIN_ID,
       `Diffusion terminée ✅
+
 Envoyés : ${sent}
 Échecs : ${failed}
 Envois non confirmés : ${unknown}
 Désabonnés ignorés : ${skipped}`
     );
   } catch (error) {
-    console.error("Diffusion interrompue :", error.message);
+    console.error(
+      "Diffusion interrompue :",
+      error.message
+    );
 
     await dire(
       ADMIN_ID,
       `Diffusion interrompue.
+
 Envoyés : ${sent}
 Échecs : ${failed}
 Non confirmés : ${unknown}
-Ne relance pas à tous : certains ont déjà reçu la publication. Vérifie Render/Supabase.`
+
+Ne relance pas immédiatement la diffusion :
+certains utilisateurs peuvent déjà l'avoir reçue.`
     ).catch(() => {});
   } finally {
     diffusionEnCours = false;
@@ -473,23 +520,59 @@ async function traiter(message) {
     .match(/^\/(\w+)(?:@\w+)?(?:\s|$)/)?.[1]
     ?.toLowerCase();
 
-  if (command === "start") {
-    // /start ouvre l'accueil sans modifier l'abonnement.
-    await envoyerPhoto(chatId);
+  // /start enregistre le profil et affiche l'accueil.
+  if (
+    command === "start" ||
+    text.trim() === "🏠 ACCUEIL"
+  ) {
+    try {
+      await enregistrerUtilisateur(message);
+    } catch (error) {
+      console.error(
+        "Enregistrement utilisateur :",
+        error.message
+      );
+    }
 
+    await afficherAccueil(chatId);
+    return;
+  }
+
+  // Inscription volontaire aux annonces.
+  if (command === "annonces") {
+    await enregistrerUtilisateur(message);
+
+    const rows = await db(
+      `bot_users?select=active&chat_id=eq.${chatId}`
+    );
+
+    if (rows[0]?.active) {
+      await dire(
+        chatId,
+        "✅ Tes annonces sont déjà activées."
+      );
+      return;
+    }
+
+    await modifierAnnonces(chatId, true);
+    optOut.delete(String(chatId));
+
+    await dire(
+      chatId,
+      "✅ Annonces activées. Tu peux les arrêter à tout moment avec /stop."
+    );
     return;
   }
 
   if (command === "stop") {
     optOut.add(String(chatId));
 
-    await desactiver(chatId);
+    await modifierAnnonces(chatId, false);
 
     await dire(
       chatId,
-      "Tu ne recevras plus les annonces. Pour te réabonner, ouvre l'accueil avec /start puis appuie sur Recevoir les annonces."
+      "🔕 Annonces désactivées. Tu peux toujours utiliser la boutique et le bouton Accueil. Pour recevoir de nouveau les annonces, utilise /annonces."
     );
-
     return;
   }
 
@@ -498,7 +581,6 @@ async function traiter(message) {
       chatId,
       `Ton identifiant Telegram : ${message.from.id}`
     );
-
     return;
   }
 
@@ -506,20 +588,24 @@ async function traiter(message) {
     return;
   }
 
+  if (command === "stats") {
+    await ficheStats(chatId);
+    return;
+  }
+
   if (command === "reinitialiser") {
     if (diffusionEnCours) {
       await dire(
         chatId,
-        "Attends la fin de la diffusion avant de réinitialiser la liste."
+        "Attends la fin de la diffusion."
       );
-
       return;
     }
 
     attenteTexte = false;
     brouillon = null;
 
-    const ids = await utilisateurs();
+    const rows = await obtenirUtilisateurs();
     const code = crypto.randomBytes(3).toString("hex");
 
     brouillon = {
@@ -530,22 +616,26 @@ async function traiter(message) {
 
     await dire(
       chatId,
-      `Réinitialisation de la liste : ${ids.length} destinataire(s) actif(s).
+      `⚠️ Réinitialisation de la liste
 
-Tous les utilisateurs enregistrés dans bot_users seront supprimés de la liste. Chacun devra appuyer sur Recevoir les annonces pour se réabonner. Les conversations Telegram restent intactes.
+Utilisateurs enregistrés : ${rows.length}
 
-Pour repartir de zéro :
+Cette opération supprimera tous les utilisateurs de bot_users, y compris leurs profils et leurs abonnements.
+
+Pour confirmer :
 /confirmer ${code}
 
-/annuler pour annuler. Cette confirmation expire dans 10 minutes.`
+Pour annuler : /annuler`
     );
-
     return;
   }
 
   if (command === "ecrire") {
     if (diffusionEnCours) {
-      await dire(chatId, "Une diffusion est déjà en cours.");
+      await dire(
+        chatId,
+        "Une diffusion est déjà en cours."
+      );
       return;
     }
 
@@ -553,23 +643,31 @@ Pour repartir de zéro :
     attenteTexte = true;
 
     const prefix =
-      text.match(/^\/ecrire(?:@\w+)?(?:\s+|$)/i)?.[0] || "";
+      text.match(
+        /^\/ecrire(?:@\w+)?(?:\s+|$)/i
+      )?.[0] || "";
 
     const contenu = text.slice(prefix.length);
 
     if (contenu.trim()) {
       const entities = (message.entities || [])
-        .filter(entity => entity.offset >= prefix.length)
+        .filter(
+          entity => entity.offset >= prefix.length
+        )
         .map(entity => ({
           ...entity,
           offset: entity.offset - prefix.length
         }));
 
-      await preparerTexte(chatId, contenu, entities);
+      await preparerTexte(
+        chatId,
+        contenu,
+        entities
+      );
     } else {
       await dire(
         chatId,
-        "Écris maintenant le message à envoyer. Je te montrerai l'aperçu avant confirmation.\n\n/annuler pour annuler."
+        "Écris ton message. Je te montrerai un aperçu avant la diffusion.\n\n/annuler pour annuler."
       );
     }
 
@@ -578,7 +676,10 @@ Pour repartir de zéro :
 
   if (attenteTexte && !command) {
     if (diffusionEnCours) {
-      await dire(chatId, "Une diffusion est déjà en cours.");
+      await dire(
+        chatId,
+        "Une diffusion est déjà en cours."
+      );
       return;
     }
 
@@ -587,13 +688,18 @@ Pour repartir de zéro :
       text,
       message.entities || []
     );
-
     return;
   }
 
-  if (command === "ouverture" || command === "fermeture") {
+  if (
+    command === "ouverture" ||
+    command === "fermeture"
+  ) {
     if (diffusionEnCours) {
-      await dire(chatId, "Une diffusion est déjà en cours.");
+      await dire(
+        chatId,
+        "Une diffusion est déjà en cours."
+      );
       return;
     }
 
@@ -605,9 +711,8 @@ Pour repartir de zéro :
     if (!ids.length) {
       await dire(
         chatId,
-        "Aucun abonné aux annonces. Fais /start puis appuie sur Recevoir les annonces pour tester."
+        "Aucun abonné aux annonces."
       );
-
       return;
     }
 
@@ -642,7 +747,8 @@ Nous sommes fermés, à demain !!! 🙏❌`
       ...media
     });
 
-    const code = crypto.randomBytes(3).toString("hex");
+    const code = crypto.randomBytes(3)
+      .toString("hex");
 
     brouillon = {
       ids,
@@ -657,29 +763,11 @@ Nous sommes fermés, à demain !!! 🙏❌`
       `Aperçu ci-dessus ✅
 Destinataires : ${ids.length}
 
-Pour envoyer à tous, écris :
+Pour envoyer :
 /confirmer ${code}
 
-/annuler pour annuler.
-Cet aperçu expire dans 10 minutes.`
+Pour annuler : /annuler`
     );
-
-    return;
-  }
-
-  if (command === "stats") {
-    const ids = await utilisateurs();
-
-    await dire(
-      chatId,
-      `Abonnés aux annonces : ${ids.length}
-${
-  diffusionEnCours
-    ? "Une diffusion est en cours."
-    : "Aucune diffusion en cours."
-}`
-    );
-
     return;
   }
 
@@ -691,13 +779,18 @@ ${
       chatId,
       "Brouillon annulé. Une diffusion déjà lancée continue."
     );
-
     return;
   }
 
-  if (command === "diffuser" || command === "diffuserphoto") {
+  if (
+    command === "diffuser" ||
+    command === "diffuserphoto"
+  ) {
     if (diffusionEnCours) {
-      await dire(chatId, "Une diffusion est déjà en cours.");
+      await dire(
+        chatId,
+        "Une diffusion est déjà en cours."
+      );
       return;
     }
 
@@ -708,16 +801,17 @@ ${
     const photo = command === "diffuserphoto";
 
     if (
-      !(photo ? source?.photo?.length : source?.video) ||
+      !(photo
+        ? source?.photo?.length
+        : source?.video) ||
       source.media_group_id
     ) {
       await dire(
         chatId,
         photo
-          ? "Envoie une seule image à ce bot en tant que PHOTO avec ta description en légende. Réponds ensuite À CETTE IMAGE avec /diffuserphoto. Les albums et fichiers ne sont pas acceptés."
-          : "Envoie une seule vidéo à ce bot avec ta description en légende. Réponds ensuite À CETTE VIDÉO avec /diffuser."
+          ? "Envoie une seule PHOTO avec sa légende, puis réponds à cette photo avec /diffuserphoto."
+          : "Envoie une seule VIDÉO avec sa légende, puis réponds à cette vidéo avec /diffuser."
       );
-
       return;
     }
 
@@ -726,26 +820,30 @@ ${
     if (!ids.length) {
       await dire(
         chatId,
-        "Aucun abonné aux annonces. Fais /start puis appuie sur Recevoir les annonces pour tester."
+        "Aucun abonné aux annonces."
       );
-
       return;
     }
 
-    const method = photo ? "sendPhoto" : "sendVideo";
+    const method = photo
+      ? "sendPhoto"
+      : "sendVideo";
 
     const media = {
       ...(photo
         ? {
             photo:
-              source.photo[source.photo.length - 1].file_id
+              source.photo[
+                source.photo.length - 1
+              ].file_id
           }
         : {
             video: source.video.file_id,
             supports_streaming: true
           }),
       caption: source.caption || "",
-      caption_entities: source.caption_entities || []
+      caption_entities:
+        source.caption_entities || []
     };
 
     await telegram(method, {
@@ -753,7 +851,8 @@ ${
       ...media
     });
 
-    const code = crypto.randomBytes(3).toString("hex");
+    const code = crypto.randomBytes(3)
+      .toString("hex");
 
     brouillon = {
       ids,
@@ -765,13 +864,16 @@ ${
 
     await dire(
       chatId,
-      `Aperçu ci-dessus. Destinataires : ${ids.length}.
-Pour envoyer, écris :
+      `Aperçu ci-dessus ✅
+Destinataires : ${ids.length}
+
+Pour envoyer :
 /confirmer ${code}
 
-/annuler pour annuler. Cet aperçu expire dans 10 minutes.`
-    );
+Pour annuler : /annuler
 
+L'aperçu expire dans 10 minutes.`
+    );
     return;
   }
 
@@ -779,7 +881,10 @@ Pour envoyer, écris :
     const code = text.trim().split(/\s+/)[1];
 
     if (diffusionEnCours) {
-      await dire(chatId, "Une diffusion est déjà en cours.");
+      await dire(
+        chatId,
+        "Une diffusion est déjà en cours."
+      );
       return;
     }
 
@@ -790,9 +895,8 @@ Pour envoyer, écris :
     ) {
       await dire(
         chatId,
-        "Confirmation invalide ou aperçu expiré. Utilise /ecrire, /ouverture, /fermeture ou /reinitialiser, ou réponds à ta vidéo avec /diffuser ou à ta photo avec /diffuserphoto."
+        "Confirmation invalide ou aperçu expiré."
       );
-
       return;
     }
 
@@ -812,35 +916,39 @@ Pour envoyer, écris :
       await dire(
         chatId,
         `Liste réinitialisée ✅
-Destinataires : 0
-Seuls ceux qui appuieront sur Recevoir les annonces seront inscrits. /start ouvre uniquement l'accueil.
-La liste ne sera pas vidée lors des redémarrages du serveur.`
-      );
 
+Utilisateurs enregistrés : 0
+
+Les nouveaux utilisateurs seront enregistrés à leur prochain /start ou clic sur Accueil.`
+      );
       return;
     }
 
     diffusionEnCours = true;
-
     void diffuser(draft);
-
     return;
   }
 
   if (command === "aide") {
     await dire(
       chatId,
-      `/ecrire : écrire un message libre, puis confirmer son envoi
-/ouverture : préparer le message d’ouverture
+      `🏥 DOCTOR PHARMA 33 — COMMANDES
+
+/start : enregistrer et afficher l'accueil
+/stats : fiche complète des utilisateurs
+/ecrire : préparer un message texte
+/ouverture : préparer le message d'ouverture
 /fermeture : préparer le message de fermeture
-/reinitialiser : vider la liste après confirmation
-/stats : nombre d'utilisateurs actifs
-/monid : ton identifiant
-/diffuser : en réponse à une vidéo avec légende
-/diffuserphoto : en réponse à une photo avec légende
-/confirmer CODE : confirmer l'action affichée
-/annuler : supprimer l'aperçu ou annuler la saisie
-/stop : arrêter tes notifications`
+/diffuser : diffuser une vidéo
+/diffuserphoto : diffuser une photo
+/confirmer CODE : confirmer une action
+/annuler : annuler un brouillon
+/reinitialiser : vider la liste
+/monid : afficher ton identifiant
+
+Commandes utilisateurs :
+/annonces : recevoir les annonces
+/stop : arrêter les annonces`
     );
   }
 }
@@ -851,14 +959,19 @@ app.get("/", (_req, res) => {
 
 app.post("/webhook", (req, res) => {
   const secret =
-    req.get("X-Telegram-Bot-Api-Secret-Token") || "";
+    req.get(
+      "X-Telegram-Bot-Api-Secret-Token"
+    ) || "";
 
   const received = Buffer.from(secret);
   const expected = Buffer.from(WEBHOOK_SECRET);
 
   if (
     received.length !== expected.length ||
-    !crypto.timingSafeEqual(received, expected)
+    !crypto.timingSafeEqual(
+      received,
+      expected
+    )
   ) {
     return res.sendStatus(403);
   }
@@ -876,47 +989,34 @@ app.post("/webhook", (req, res) => {
   updatesVus.add(id);
 
   if (updatesVus.size > 10000) {
-    updatesVus.delete(updatesVus.values().next().value);
+    updatesVus.delete(
+      updatesVus.values().next().value
+    );
   }
 
-  // Réponse immédiate pour éviter les répétitions de Telegram.
   res.sendStatus(200);
 
   const message = req.body.message;
-  const callback = req.body.callback_query;
 
-  // Prendre en compte /stop immédiatement,
-  // même si d'autres messages attendent leur traitement.
   if (
     message?.chat?.type === "private" &&
-    /^\/stop(?:@\w+)?(?:\s|$)/i.test(message.text || "")
+    /^\/stop(?:@\w+)?(?:\s|$)/i.test(
+      message.text || ""
+    )
   ) {
     optOut.add(String(message.chat.id));
   }
 
-  // Prendre en compte immédiatement le bouton de désabonnement.
-  if (
-    callback?.data === "annonces_desabonner" &&
-    callback.message?.chat?.type === "private" &&
-    String(callback.from?.id) ===
-      String(callback.message.chat.id)
-  ) {
-    optOut.add(String(callback.from.id));
-  }
-
   fileMessages = fileMessages
-    .then(() =>
-      callback
-        ? traiterCallback(callback)
-        : traiter(message)
-    )
+    .then(() => traiter(message))
     .catch(error => {
-      console.error("Erreur traitement :", error.message);
+      console.error(
+        "Erreur traitement :",
+        error.message
+      );
 
       if (
-        String(
-          message?.from?.id || callback?.from?.id
-        ) === ADMIN_ID
+        String(message?.from?.id) === ADMIN_ID
       ) {
         return dire(
           ADMIN_ID,
@@ -930,69 +1030,89 @@ async function configurerWebhook() {
   await telegram("setWebhook", {
     url: `${BASE_URL}/webhook`,
     secret_token: WEBHOOK_SECRET,
-    allowed_updates: [
-      "message",
-      "callback_query"
-    ],
+    allowed_updates: ["message"],
     max_connections: 1
   });
 }
 
 if (require.main === module) {
-  if (!TOKEN || !SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+  if (
+    !TOKEN ||
+    !SUPABASE_URL ||
+    !SUPABASE_SECRET_KEY
+  ) {
     throw new Error(
-      "Il faut BOT_TOKEN, SUPABASE_URL et SUPABASE_SECRET_KEY dans Render."
+      "Configure BOT_TOKEN, SUPABASE_URL et SUPABASE_SECRET_KEY dans Render."
     );
   }
 
   if (
-    !/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL)
+    !/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(
+      SUPABASE_URL
+    )
   ) {
     throw new Error(
-      "SUPABASE_URL doit être l'adresse https://…supabase.co du projet."
+      "SUPABASE_URL doit être une adresse Supabase valide."
     );
   }
 
-  if (!SUPABASE_SECRET_KEY.startsWith("sb_secret_")) {
+  if (
+    !SUPABASE_SECRET_KEY.startsWith(
+      "sb_secret_"
+    )
+  ) {
     throw new Error(
       "SUPABASE_SECRET_KEY doit commencer par sb_secret_."
     );
   }
 
-  app.listen(process.env.PORT || 3000, async () => {
-    console.log("Serveur démarré ✅");
+  app.listen(
+    process.env.PORT || 3000,
+    async () => {
+      console.log("Serveur démarré ✅");
 
-    try {
-      const me = await telegram("getMe", {});
+      try {
+        const me = await telegram("getMe", {});
 
-      console.log(`Bot connecté : @${me.username}`);
+        console.log(
+          `Bot connecté : @${me.username}`
+        );
 
-      await configurerWebhook();
+        await configurerWebhook();
 
-      console.log("Webhook configuré ✅");
-    } catch (error) {
-      console.error(
-        "Configuration Telegram :",
-        error.message
-      );
+        console.log(
+          "Webhook configuré ✅"
+        );
+      } catch (error) {
+        console.error(
+          "Configuration Telegram :",
+          error.message
+        );
 
-      process.exit(1);
+        process.exit(1);
+      }
+
+      try {
+        await db(
+          "bot_users?select=chat_id&limit=1"
+        );
+
+        console.log(
+          "Supabase connecté ✅"
+        );
+      } catch (error) {
+        console.error(
+          "Erreur Supabase :",
+          error.message
+        );
+      }
     }
-
-    try {
-      await db("bot_users?select=chat_id&limit=1");
-
-      console.log("Supabase connecté ✅");
-    } catch (error) {
-      console.error(error.message);
-    }
-  });
+  );
 }
 
 module.exports = {
   app,
   traiter,
-  traiterCallback,
   utilisateurs,
   telegram,
   db,
