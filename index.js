@@ -8,19 +8,23 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const TOKEN = (process.env.BOT_TOKEN || "").trim();
+
 const SUPABASE_URL = (process.env.SUPABASE_URL || "")
   .trim()
   .replace(/\/$/, "");
+
 const SUPABASE_SECRET_KEY = (
   process.env.SUPABASE_SECRET_KEY || ""
 ).trim();
 
 const ADMIN_ID = "8516075351";
+
 const BASE_URL =
   "https://doctor-pharma-bot-iyki.onrender.com";
 
 const PHOTO_NAME =
   "3168703F-5AD2-4B96-A901-3E86B0355FF8.png";
+
 const PHOTO_PATH = path.join(__dirname, PHOTO_NAME);
 
 const WEBHOOK_SECRET = crypto
@@ -28,6 +32,8 @@ const WEBHOOK_SECRET = crypto
   .update("doctor-pharma-webhook-v1")
   .digest("hex");
 
+// MESSAGE DE BIENVENUE
+// Le contact Telegram a été retiré.
 const TEXTE = `<b>Bienvenue chez Doctor Pharma 33 👋🇫🇷
 
 Les références du Doctor sont enfin disponibles sur Telegram ! 🔥
@@ -35,10 +41,9 @@ Les références du Doctor sont enfin disponibles sur Telegram ! 🔥
 ⚡ Une équipe réactive et à ecoute🧏🏻‍♂️
 ⭐️ Qualité assurée !!! 🤝
 
-👇Appuie sur le bouton boutique pour découvrir le menu 🫵
+👇Appuie sur le bouton boutique pour découvrir le menu 🫵</b>`;
 
-📲 @Doctor_commande33k</b>`;
-
+// BOUTONS DE L'ACCUEIL
 const BOUTONS = {
   inline_keyboard: [
     [
@@ -84,9 +89,14 @@ const BOUTONS = {
   ]
 };
 
+// BOUTON GRIS FIXE EN BAS
 const CLAVIER_ACCUEIL = {
   keyboard: [
-    [{ text: "🏠 ACCUEIL" }]
+    [
+      {
+        text: "🏠 ACCUEIL"
+      }
+    ]
   ],
   resize_keyboard: true,
   is_persistent: true
@@ -95,6 +105,7 @@ const CLAVIER_ACCUEIL = {
 const wait = ms =>
   new Promise(resolve => setTimeout(resolve, ms));
 
+// COMMUNICATION TELEGRAM
 async function telegram(method, body, multipart = false) {
   const response = await fetch(
     `https://api.telegram.org/bot${TOKEN}/${method}`,
@@ -123,6 +134,7 @@ async function telegram(method, body, multipart = false) {
 
     error.telegramCode = result.error_code;
     error.retryAfter = result.parameters?.retry_after;
+
     throw error;
   }
 
@@ -136,6 +148,7 @@ const dire = (chatId, text, extra = {}) =>
     ...extra
   });
 
+// CONNEXION SUPABASE
 async function db(
   resource,
   method = "GET",
@@ -155,7 +168,9 @@ async function db(
       },
       ...(body === undefined
         ? {}
-        : { body: JSON.stringify(body) }),
+        : {
+            body: JSON.stringify(body)
+          }),
       signal: AbortSignal.timeout(20000)
     }
   );
@@ -169,11 +184,13 @@ async function db(
   }
 
   const text = await response.text();
+
   return text ? JSON.parse(text) : null;
 }
 
-// Enregistre l'utilisateur sans modifier
-// son choix concernant les annonces.
+// ENREGISTRER LES UTILISATEURS
+// /start et ACCUEIL enregistrent les profils.
+// L'inscription aux annonces reste indépendante.
 async function enregistrerUtilisateur(message) {
   const chatId = message.chat.id;
   const user = message.from;
@@ -215,7 +232,10 @@ async function modifierAnnonces(chatId, active) {
   );
 }
 
-async function obtenirUtilisateurs(actifsSeulement = false) {
+// RECUPERER LES UTILISATEURS
+async function obtenirUtilisateurs(
+  actifsSeulement = false
+) {
   const resultats = [];
 
   for (let offset = 0; ; offset += 500) {
@@ -240,39 +260,50 @@ async function obtenirUtilisateurs(actifsSeulement = false) {
 
 async function utilisateurs() {
   const rows = await obtenirUtilisateurs(true);
+
   return rows.map(row => row.chat_id);
 }
 
-// Image et boutons habituels.
+// IMAGE + TEXTE + BOUTONS
 async function envoyerPhoto(chatId) {
   const image = await fs.promises.readFile(PHOTO_PATH);
+
   const form = new FormData();
 
   form.append("chat_id", String(chatId));
   form.append("caption", TEXTE);
   form.append("parse_mode", "HTML");
-  form.append("reply_markup", JSON.stringify(BOUTONS));
+
+  form.append(
+    "reply_markup",
+    JSON.stringify(BOUTONS)
+  );
 
   form.append(
     "photo",
-    new Blob([image], { type: "image/png" }),
+    new Blob([image], {
+      type: "image/png"
+    }),
     PHOTO_NAME
   );
 
   await telegram("sendPhoto", form, true);
 }
 
-// Affiche le bouton gris fixe et l'accueil.
+// AFFICHER L'ACCUEIL
 async function afficherAccueil(chatId) {
   await dire(
     chatId,
     "🏠 Accueil Doctor Pharma 33",
-    { reply_markup: CLAVIER_ACCUEIL }
+    {
+      reply_markup: CLAVIER_ACCUEIL
+    }
   );
 
   await envoyerPhoto(chatId);
 }
 
+// ETAT DES COMMANDES ADMIN
 let brouillon = null;
 let attenteTexte = false;
 let diffusionEnCours = false;
@@ -282,6 +313,7 @@ const updatesVus = new Set();
 
 let fileMessages = Promise.resolve();
 
+// FICHE COMPLETE /stats
 async function ficheStats(chatId) {
   const rows = await obtenirUtilisateurs();
 
@@ -312,6 +344,7 @@ async function ficheStats(chatId) {
 
       texte += `${index + 1}. ${nom}${pseudo}\n`;
       texte += `ID : ${row.chat_id}\n`;
+
       texte += row.active
         ? "Annonces : activées ✅\n\n"
         : "Annonces : désactivées 🔕\n\n";
@@ -322,8 +355,7 @@ async function ficheStats(chatId) {
     ? "📤 Une diffusion est en cours."
     : "✅ Aucune diffusion en cours.";
 
-  // Telegram limite les messages à 4096 caractères.
-  // Découpage sans perdre les utilisateurs.
+  // Découper les longs messages.
   const lignes = texte.split("\n");
   let partie = "";
 
@@ -331,7 +363,10 @@ async function ficheStats(chatId) {
     if (
       partie.length + ligne.length + 1 > 3900
     ) {
-      await dire(chatId, partie);
+      if (partie.trim()) {
+        await dire(chatId, partie);
+      }
+
       partie = "";
     }
 
@@ -343,12 +378,18 @@ async function ficheStats(chatId) {
   }
 }
 
-async function preparerTexte(chatId, text, entities = []) {
+// PREPARER UN MESSAGE TEXTE
+async function preparerTexte(
+  chatId,
+  text,
+  entities = []
+) {
   if (!text.trim() || text.length > 4096) {
     await dire(
       chatId,
       "Écris un message de 4 096 caractères maximum, ou /annuler."
     );
+
     return;
   }
 
@@ -359,17 +400,22 @@ async function preparerTexte(chatId, text, entities = []) {
       chatId,
       "Aucun abonné aux annonces pour le moment."
     );
+
     return;
   }
 
-  const media = { text, entities };
+  const media = {
+    text,
+    entities
+  };
 
   await telegram("sendMessage", {
     chat_id: chatId,
     ...media
   });
 
-  const code = crypto.randomBytes(3).toString("hex");
+  const code = crypto.randomBytes(3)
+    .toString("hex");
 
   brouillon = {
     ids,
@@ -395,6 +441,7 @@ L'aperçu expire dans 10 minutes.`
   );
 }
 
+// DIFFUSION AUX ABONNES
 async function diffuser(draft) {
   let sent = 0;
   let failed = 0;
@@ -461,8 +508,10 @@ async function diffuser(draft) {
           failed++;
 
           if (error.telegramCode === 403) {
-            await modifierAnnonces(chatId, false)
-              .catch(() => {});
+            await modifierAnnonces(
+              chatId,
+              false
+            ).catch(() => {});
           }
         } else {
           unknown++;
@@ -503,6 +552,7 @@ certains utilisateurs peuvent déjà l'avoir reçue.`
   }
 }
 
+// TRAITEMENT DES MESSAGES
 async function traiter(message) {
   if (
     !message ||
@@ -513,14 +563,19 @@ async function traiter(message) {
   }
 
   const chatId = message.chat.id;
-  const admin = String(message.from.id) === ADMIN_ID;
+
+  const admin =
+    String(message.from.id) === ADMIN_ID;
+
   const text = message.text || "";
 
   const command = text
-    .match(/^\/(\w+)(?:@\w+)?(?:\s|$)/)?.[1]
+    .match(
+      /^\/(\w+)(?:@\w+)?(?:\s|$)/
+    )?.[1]
     ?.toLowerCase();
 
-  // /start enregistre le profil et affiche l'accueil.
+  // /start ET BOUTON ACCUEIL
   if (
     command === "start" ||
     text.trim() === "🏠 ACCUEIL"
@@ -538,7 +593,7 @@ async function traiter(message) {
     return;
   }
 
-  // Inscription volontaire aux annonces.
+  // INSCRIPTION VOLONTAIRE AUX ANNONCES
   if (command === "annonces") {
     await enregistrerUtilisateur(message);
 
@@ -551,19 +606,23 @@ async function traiter(message) {
         chatId,
         "✅ Tes annonces sont déjà activées."
       );
+
       return;
     }
 
     await modifierAnnonces(chatId, true);
+
     optOut.delete(String(chatId));
 
     await dire(
       chatId,
       "✅ Annonces activées. Tu peux les arrêter à tout moment avec /stop."
     );
+
     return;
   }
 
+  // DESACTIVATION DES ANNONCES
   if (command === "stop") {
     optOut.add(String(chatId));
 
@@ -573,32 +632,39 @@ async function traiter(message) {
       chatId,
       "🔕 Annonces désactivées. Tu peux toujours utiliser la boutique et le bouton Accueil. Pour recevoir de nouveau les annonces, utilise /annonces."
     );
+
     return;
   }
 
+  // IDENTIFIANT TELEGRAM
   if (command === "monid") {
     await dire(
       chatId,
       `Ton identifiant Telegram : ${message.from.id}`
     );
+
     return;
   }
 
+  // COMMANDES ADMIN UNIQUEMENT
   if (!admin) {
     return;
   }
 
+  // STATISTIQUES
   if (command === "stats") {
     await ficheStats(chatId);
     return;
   }
 
+  // REINITIALISATION
   if (command === "reinitialiser") {
     if (diffusionEnCours) {
       await dire(
         chatId,
         "Attends la fin de la diffusion."
       );
+
       return;
     }
 
@@ -606,7 +672,9 @@ async function traiter(message) {
     brouillon = null;
 
     const rows = await obtenirUtilisateurs();
-    const code = crypto.randomBytes(3).toString("hex");
+
+    const code = crypto.randomBytes(3)
+      .toString("hex");
 
     brouillon = {
       type: "reset",
@@ -627,15 +695,18 @@ Pour confirmer :
 
 Pour annuler : /annuler`
     );
+
     return;
   }
 
+  // ECRIRE UN MESSAGE
   if (command === "ecrire") {
     if (diffusionEnCours) {
       await dire(
         chatId,
         "Une diffusion est déjà en cours."
       );
+
       return;
     }
 
@@ -650,13 +721,17 @@ Pour annuler : /annuler`
     const contenu = text.slice(prefix.length);
 
     if (contenu.trim()) {
-      const entities = (message.entities || [])
+      const entities = (
+        message.entities || []
+      )
         .filter(
-          entity => entity.offset >= prefix.length
+          entity =>
+            entity.offset >= prefix.length
         )
         .map(entity => ({
           ...entity,
-          offset: entity.offset - prefix.length
+          offset:
+            entity.offset - prefix.length
         }));
 
       await preparerTexte(
@@ -674,12 +749,14 @@ Pour annuler : /annuler`
     return;
   }
 
+  // TEXTE EN ATTENTE
   if (attenteTexte && !command) {
     if (diffusionEnCours) {
       await dire(
         chatId,
         "Une diffusion est déjà en cours."
       );
+
       return;
     }
 
@@ -688,9 +765,11 @@ Pour annuler : /annuler`
       text,
       message.entities || []
     );
+
     return;
   }
 
+  // OUVERTURE ET FERMETURE
   if (
     command === "ouverture" ||
     command === "fermeture"
@@ -700,6 +779,7 @@ Pour annuler : /annuler`
         chatId,
         "Une diffusion est déjà en cours."
       );
+
       return;
     }
 
@@ -713,10 +793,12 @@ Pour annuler : /annuler`
         chatId,
         "Aucun abonné aux annonces."
       );
+
       return;
     }
 
-    const ouverture = command === "ouverture";
+    const ouverture =
+      command === "ouverture";
 
     const media = ouverture
       ? {
@@ -768,9 +850,11 @@ Pour envoyer :
 
 Pour annuler : /annuler`
     );
+
     return;
   }
 
+  // ANNULER UN BROUILLON
   if (command === "annuler") {
     brouillon = null;
     attenteTexte = false;
@@ -779,9 +863,11 @@ Pour annuler : /annuler`
       chatId,
       "Brouillon annulé. Une diffusion déjà lancée continue."
     );
+
     return;
   }
 
+  // DIFFUSER VIDEO OU PHOTO
   if (
     command === "diffuser" ||
     command === "diffuserphoto"
@@ -791,6 +877,7 @@ Pour annuler : /annuler`
         chatId,
         "Une diffusion est déjà en cours."
       );
+
       return;
     }
 
@@ -798,7 +885,9 @@ Pour annuler : /annuler`
     brouillon = null;
 
     const source = message.reply_to_message;
-    const photo = command === "diffuserphoto";
+
+    const photo =
+      command === "diffuserphoto";
 
     if (
       !(photo
@@ -812,6 +901,7 @@ Pour annuler : /annuler`
           ? "Envoie une seule PHOTO avec sa légende, puis réponds à cette photo avec /diffuserphoto."
           : "Envoie une seule VIDÉO avec sa légende, puis réponds à cette vidéo avec /diffuser."
       );
+
       return;
     }
 
@@ -822,6 +912,7 @@ Pour annuler : /annuler`
         chatId,
         "Aucun abonné aux annonces."
       );
+
       return;
     }
 
@@ -874,17 +965,21 @@ Pour annuler : /annuler
 
 L'aperçu expire dans 10 minutes.`
     );
+
     return;
   }
 
+  // CONFIRMER UNE ACTION
   if (command === "confirmer") {
-    const code = text.trim().split(/\s+/)[1];
+    const code = text.trim()
+      .split(/\s+/)[1];
 
     if (diffusionEnCours) {
       await dire(
         chatId,
         "Une diffusion est déjà en cours."
       );
+
       return;
     }
 
@@ -897,6 +992,7 @@ L'aperçu expire dans 10 minutes.`
         chatId,
         "Confirmation invalide ou aperçu expiré."
       );
+
       return;
     }
 
@@ -921,14 +1017,18 @@ Utilisateurs enregistrés : 0
 
 Les nouveaux utilisateurs seront enregistrés à leur prochain /start ou clic sur Accueil.`
       );
+
       return;
     }
 
     diffusionEnCours = true;
+
     void diffuser(draft);
+
     return;
   }
 
+  // AIDE ADMIN
   if (command === "aide") {
     await dire(
       chatId,
@@ -950,13 +1050,19 @@ Commandes utilisateurs :
 /annonces : recevoir les annonces
 /stop : arrêter les annonces`
     );
+
+    return;
   }
 }
 
+// ROUTE PRINCIPALE
 app.get("/", (_req, res) => {
-  res.send("Serveur Doctor Pharma 33 actif ✅");
+  res.send(
+    "Serveur Doctor Pharma 33 actif ✅"
+  );
 });
 
+// WEBHOOK TELEGRAM
 app.post("/webhook", (req, res) => {
   const secret =
     req.get(
@@ -994,6 +1100,7 @@ app.post("/webhook", (req, res) => {
     );
   }
 
+  // Réponse immédiate à Telegram.
   res.sendStatus(200);
 
   const message = req.body.message;
@@ -1026,6 +1133,7 @@ app.post("/webhook", (req, res) => {
     });
 });
 
+// CONFIGURATION WEBHOOK
 async function configurerWebhook() {
   await telegram("setWebhook", {
     url: `${BASE_URL}/webhook`,
@@ -1035,6 +1143,7 @@ async function configurerWebhook() {
   });
 }
 
+// DEMARRAGE DU SERVEUR
 if (require.main === module) {
   if (
     !TOKEN ||
@@ -1072,7 +1181,10 @@ if (require.main === module) {
       console.log("Serveur démarré ✅");
 
       try {
-        const me = await telegram("getMe", {});
+        const me = await telegram(
+          "getMe",
+          {}
+        );
 
         console.log(
           `Bot connecté : @${me.username}`
