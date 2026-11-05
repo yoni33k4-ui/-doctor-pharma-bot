@@ -16,7 +16,8 @@ const BOT_TOKEN = (process.env.BOT_TOKEN || "").trim();
 const ADMIN_ID = String(process.env.ADMIN_ID || "").trim();
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "")
-  .trim().replace(/\/$/, "");
+  .trim()
+  .replace(/\/$/, "");
 
 const SUPABASE_KEY = (
   process.env.SUPABASE_SECRET_KEY ||
@@ -25,7 +26,8 @@ const SUPABASE_KEY = (
 ).trim();
 
 const BASE_URL = (process.env.BASE_URL || "")
-  .trim().replace(/\/$/, "");
+  .trim()
+  .replace(/\/$/, "");
 
 const MINI_APP_URL = (
   process.env.MINI_APP_URL ||
@@ -42,38 +44,32 @@ const BOT_USERNAME = "Doctorp33bot";
 const sleep = ms =>
   new Promise(resolve => setTimeout(resolve, ms));
 
-// ==========================================
-// DIAGNOSTIC RENDER AMÉLIORÉ
-// ==========================================
-
 const checks = {
-  BOT_TOKEN: Boolean(BOT_TOKEN),
+  BOT_TOKEN: /^\d+:[A-Za-z0-9_-]+$/.test(BOT_TOKEN),
   ADMIN_ID: /^\d+$/.test(ADMIN_ID),
-  SUPABASE_URL: Boolean(SUPABASE_URL),
+  SUPABASE_URL:
+    /^https:\/\/[^/]+\.supabase\.co$/.test(SUPABASE_URL),
   SUPABASE_SECRET_KEY: Boolean(SUPABASE_KEY),
-  BASE_URL: Boolean(BASE_URL),
+  BASE_URL: /^https:\/\/[^/]+$/.test(BASE_URL),
+  MINI_APP_URL: /^https:\/\/[^/]+$/.test(MINI_APP_URL),
   MESSAGE_ENCRYPTION_KEY:
     /^[a-f0-9]{64}$/i.test(ENCRYPTION_KEY)
 };
 
-const missing = Object.entries(checks)
+const invalid = Object.entries(checks)
   .filter(([, valid]) => !valid)
   .map(([name]) => name);
 
-if (missing.length > 0) {
+if (invalid.length) {
   console.error(
     "Variables Render absentes ou invalides :",
-    missing.join(", ")
+    invalid.join(", ")
   );
   process.exit(1);
 }
 
-const TG_API =
-  `https://api.telegram.org/bot${BOT_TOKEN}`;
-
-const AES_KEY = Buffer.from(
-  ENCRYPTION_KEY, "hex"
-);
+const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const AES_KEY = Buffer.from(ENCRYPTION_KEY, "hex");
 
 const WEBHOOK_SECRET = crypto
   .createHmac("sha256", BOT_TOKEN)
@@ -89,14 +85,14 @@ function safeEqual(a, b) {
 }
 
 function validUUID(id) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     .test(String(id));
 }
 
 function apiError(res, error, status = 500) {
-  console.error(error);
+  console.error("API:", error.message);
 
-  res.status(status).json({
+  return res.status(status).json({
     ok: false,
     error: status === 500
       ? "Erreur interne du serveur"
@@ -130,11 +126,13 @@ function encrypt(value) {
 }
 
 function decrypt(value) {
-  const [iv, tag, content] = String(value).split(".");
+  const parts = String(value).split(".");
 
-  if (!iv || !tag || !content) {
+  if (parts.length !== 3) {
     throw new Error("Brouillon chiffré invalide");
   }
+
+  const [iv, tag, content] = parts;
 
   const decipher = crypto.createDecipheriv(
     "aes-256-gcm",
@@ -164,7 +162,8 @@ async function telegram(method, body = {}) {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000)
     }
   );
 
@@ -186,7 +185,7 @@ async function telegram(method, body = {}) {
 }
 
 // ==========================================
-// SUPABASE
+// SUPABASE API
 // ==========================================
 
 async function db(
@@ -208,7 +207,8 @@ async function db(
       },
       body: body === null
         ? undefined
-        : JSON.stringify(body)
+        : JSON.stringify(body),
+      signal: AbortSignal.timeout(20000)
     }
   );
 
@@ -233,7 +233,8 @@ async function rpc(name, params = {}) {
         Authorization: `Bearer ${SUPABASE_KEY}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(params)
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(20000)
     }
   );
 
@@ -249,7 +250,7 @@ async function rpc(name, params = {}) {
 }
 
 // ==========================================
-// AUTHENTIFICATION TELEGRAM
+// AUTHENTIFICATION ADMIN TELEGRAM
 // ==========================================
 
 function verifyInitData(initData) {
@@ -263,9 +264,11 @@ function verifyInitData(initData) {
 
   try {
     const params = new URLSearchParams(initData);
-
     const hash = params.get("hash");
-    if (!hash) return null;
+
+    if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
+      return null;
+    }
 
     params.delete("hash");
     params.delete("signature");
@@ -370,7 +373,7 @@ app.use("/api/admin", (req, res, next) => {
 });
 
 // ==========================================
-// UTILISATEURS ET ABONNEMENTS
+// UTILISATEURS
 // ==========================================
 
 async function registerUser(user) {
@@ -380,32 +383,40 @@ async function registerUser(user) {
     "bot_users",
     "GET",
     null,
-    `?telegram_id=eq.${id}&select=telegram_id`
+    `?chat_id=eq.${id}&select=chat_id`
   );
 
-  if (!existing.length) {
-    await db("bot_users", "POST", {
-      telegram_id: id,
-      first_name: user.first_name || "",
-      username: user.username || "",
-      subscribed: false,
-      blocked: false
-    });
+  const profile = {
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    username: user.username || ""
+  };
 
-    return;
+  if (existing.length === 0) {
+    await db(
+      "bot_users",
+      "POST",
+      {
+        chat_id: id,
+        telegram_id: id,
+        active: false,
+        subscribed: false,
+        blocked: false,
+        ...profile
+      }
+    );
+  } else {
+    await db(
+      "bot_users",
+      "PATCH",
+      {
+        telegram_id: id,
+        ...profile,
+        updated_at: new Date().toISOString()
+      },
+      `?chat_id=eq.${id}`
+    );
   }
-
-  await db(
-    "bot_users",
-    "PATCH",
-    {
-      first_name: user.first_name || "",
-      username: user.username || "",
-      blocked: false,
-      updated_at: new Date().toISOString()
-    },
-    `?telegram_id=eq.${id}`
-  );
 }
 
 async function setSubscription(id, subscribed) {
@@ -414,15 +425,45 @@ async function setSubscription(id, subscribed) {
     "PATCH",
     {
       subscribed,
+      active: subscribed,
       blocked: false,
       updated_at: new Date().toISOString()
     },
-    `?telegram_id=eq.${id}`
+    `?chat_id=eq.${String(id)}`
   );
 }
 
+async function getAllUsers() {
+  const users = [];
+  const limit = 500;
+  let offset = 0;
+
+  while (true) {
+    const rows = await db(
+      "bot_users",
+      "GET",
+      null,
+      "?select=chat_id,telegram_id," +
+      "first_name,last_name,username," +
+      "subscribed,blocked" +
+      `&order=chat_id.asc&limit=${limit}` +
+      `&offset=${offset}`
+    );
+
+    users.push(...rows);
+
+    if (rows.length < limit) {
+      break;
+    }
+
+    offset += limit;
+  }
+
+  return users;
+}
+
 // ==========================================
-// ACCUEIL DOCTOR PHARMA 33
+// ACCUEIL
 // ==========================================
 
 const welcomeText =
@@ -489,6 +530,10 @@ app.post("/telegram/webhook", async (req, res) => {
 
   const update = req.body;
 
+  if (!Number.isSafeInteger(update?.update_id)) {
+    return res.sendStatus(400);
+  }
+
   try {
     const claimed = await rpc(
       "claim_telegram_update",
@@ -510,6 +555,7 @@ app.post("/telegram/webhook", async (req, res) => {
 
       if (
         text === "/start" ||
+        text.startsWith("/start ") ||
         text === "🏠 Accueil"
       ) {
         await registerUser(message.from);
@@ -517,9 +563,7 @@ app.post("/telegram/webhook", async (req, res) => {
       }
 
       if (text === "/admin") {
-        if (
-          String(message.from.id) !== ADMIN_ID
-        ) {
+        if (String(message.from.id) !== ADMIN_ID) {
           await telegram("sendMessage", {
             chat_id: chatId,
             text: "⛔ Accès administrateur refusé."
@@ -536,6 +580,38 @@ app.post("/telegram/webhook", async (req, res) => {
                 }
               }]]
             }
+          });
+        }
+      }
+
+      if (text === "/stats") {
+        if (String(message.from.id) !== ADMIN_ID) {
+          await telegram("sendMessage", {
+            chat_id: chatId,
+            text: "⛔ Accès administrateur refusé."
+          });
+        } else {
+          const users = await getAllUsers();
+
+          const subscribed = users.filter(
+            u => u.subscribed && !u.blocked
+          ).length;
+
+          const blocked = users.filter(
+            u => u.blocked
+          ).length;
+
+          const lines = [
+            "📊 STATISTIQUES DOCTOR PHARMA 33",
+            "",
+            `👥 Utilisateurs : ${users.length}`,
+            `🔔 Abonnés : ${subscribed}`,
+            `🚫 Bloqués : ${blocked}`
+          ];
+
+          await telegram("sendMessage", {
+            chat_id: chatId,
+            text: lines.join("\n")
           });
         }
       }
@@ -575,8 +651,7 @@ app.post("/telegram/webhook", async (req, res) => {
 
     return res.sendStatus(200);
   } catch (error) {
-    console.error("Webhook:", error);
-
+    console.error("Webhook:", error.message);
     return res.sendStatus(500);
   }
 });
@@ -593,25 +668,15 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.post(
-  "/api/admin/verify",
-  adminAuth,
-  (req, res) => {
-    res.json({
-      ok: true,
-      admin: true,
-      user: {
-        id: req.admin.id,
-        first_name: req.admin.first_name
-      }
-    });
-  }
-);
+// ==========================================
+// AUTHENTIFICATION ADMIN
+// ==========================================
 
-app.post(
-  "/api/admin/session",
-  adminAuth,
-  (req, res) => {
+for (const route of [
+  "/api/admin/verify",
+  "/api/admin/session"
+]) {
+  app.post(route, adminAuth, (req, res) => {
     res.json({
       ok: true,
       admin: true,
@@ -620,8 +685,12 @@ app.post(
         first_name: req.admin.first_name
       }
     });
-  }
-);
+  });
+}
+
+// ==========================================
+// SANTÉ ADMINISTRATION
+// ==========================================
 
 app.get(
   "/api/admin/health",
@@ -632,12 +701,7 @@ app.get(
         await Promise.all([
           telegram("getMe"),
           telegram("getWebhookInfo"),
-          db(
-            "bot_users",
-            "GET",
-            null,
-            "?select=telegram_id,subscribed,blocked"
-          )
+          getAllUsers()
         ]);
 
       res.json({
@@ -670,17 +734,16 @@ app.get(
   }
 );
 
+// ==========================================
+// STATISTIQUES ADMIN
+// ==========================================
+
 app.get(
   "/api/admin/stats",
   adminAuth,
   async (req, res) => {
     try {
-      const users = await db(
-        "bot_users",
-        "GET",
-        null,
-        "?select=telegram_id,first_name,username,subscribed,blocked&limit=1000"
-      );
+      const users = await getAllUsers();
 
       res.json({
         ok: true,
@@ -694,12 +757,12 @@ app.get(
 );
 
 // ==========================================
-// VALIDATION DES MESSAGES ET BOUTONS
+// VALIDATION DES MESSAGES
 // ==========================================
 
 function validateDraft(input) {
   const text = String(
-    input.text || ""
+    input?.text || ""
   ).trim();
 
   if (!text || text.length > 4096) {
@@ -708,7 +771,7 @@ function validateDraft(input) {
     );
   }
 
-  const suppliedButtons = input.buttons || [];
+  const suppliedButtons = input?.buttons || [];
 
   if (
     !Array.isArray(suppliedButtons) ||
@@ -730,7 +793,7 @@ function validateDraft(input) {
 
     if (!label || label.length > 64) {
       throw new Error(
-        "Nom de bouton invalide (1 à 64 caractères)"
+        "Nom de bouton invalide"
       );
     }
 
@@ -772,7 +835,7 @@ function telegramButtons(buttons) {
 }
 
 // ==========================================
-// CRÉER UN BROUILLON
+// CRÉER UN BROUILLON CHIFFRÉ
 // ==========================================
 
 app.post(
@@ -935,7 +998,7 @@ app.delete(
 );
 
 // ==========================================
-// DÉCLENCHER L'ENVOI MANUEL
+// ENVOI MANUEL CONFIRMÉ
 // ==========================================
 
 app.post(
@@ -1059,11 +1122,14 @@ async function processQueue() {
           "message_drafts",
           "GET",
           null,
-          `?id=eq.${job.message_id}&select=encrypted_content`
+          `?id=eq.${job.message_id}` +
+          "&select=encrypted_content"
         );
 
         if (!drafts.length) {
-          throw new Error("Brouillon introuvable");
+          throw new Error(
+            "Brouillon introuvable"
+          );
         }
 
         const content = decrypt(
@@ -1072,7 +1138,11 @@ async function processQueue() {
 
         let delivered = false;
 
-        for (let attempt = 0; attempt < 3; attempt++) {
+        for (
+          let attempt = 0;
+          attempt < 3;
+          attempt++
+        ) {
           try {
             await telegram("sendMessage", {
               chat_id: job.telegram_id,
@@ -1091,7 +1161,8 @@ async function processQueue() {
                 "PATCH",
                 {
                   subscribed: false,
-                  blocked: true
+                  blocked: true,
+                  active: false
                 },
                 `?telegram_id=eq.${job.telegram_id}`
               );
@@ -1142,6 +1213,7 @@ async function processQueue() {
         ).catch(console.error);
       }
 
+      // Temporisation entre les envois
       await sleep(100);
     }
   } catch (error) {
@@ -1196,7 +1268,7 @@ async function start() {
 start().catch(error => {
   console.error(
     "Démarrage impossible:",
-    error
+    error.message
   );
 
   process.exit(1);
