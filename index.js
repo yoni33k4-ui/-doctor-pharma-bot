@@ -42,15 +42,29 @@ const BOT_USERNAME = "Doctorp33bot";
 const sleep = ms =>
   new Promise(resolve => setTimeout(resolve, ms));
 
-if (
-  !BOT_TOKEN ||
-  !/^\d+$/.test(ADMIN_ID) ||
-  !SUPABASE_URL ||
-  !SUPABASE_KEY ||
-  !BASE_URL ||
-  !/^[a-f0-9]{64}$/i.test(ENCRYPTION_KEY)
-) {
-  console.error("Configuration Render incomplète.");
+// ==========================================
+// DIAGNOSTIC RENDER AMÉLIORÉ
+// ==========================================
+
+const checks = {
+  BOT_TOKEN: Boolean(BOT_TOKEN),
+  ADMIN_ID: /^\d+$/.test(ADMIN_ID),
+  SUPABASE_URL: Boolean(SUPABASE_URL),
+  SUPABASE_SECRET_KEY: Boolean(SUPABASE_KEY),
+  BASE_URL: Boolean(BASE_URL),
+  MESSAGE_ENCRYPTION_KEY:
+    /^[a-f0-9]{64}$/i.test(ENCRYPTION_KEY)
+};
+
+const missing = Object.entries(checks)
+  .filter(([, valid]) => !valid)
+  .map(([name]) => name);
+
+if (missing.length > 0) {
+  console.error(
+    "Variables Render absentes ou invalides :",
+    missing.join(", ")
+  );
   process.exit(1);
 }
 
@@ -75,7 +89,7 @@ function safeEqual(a, b) {
 }
 
 function validUUID(id) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     .test(String(id));
 }
 
@@ -1023,7 +1037,6 @@ async function processQueue() {
 
     for (const job of jobs || []) {
       try {
-        // Revérifier le consentement avant l'envoi.
         const users = await db(
           "bot_users",
           "GET",
@@ -1129,7 +1142,6 @@ async function processQueue() {
         ).catch(console.error);
       }
 
-      // Cadence prudente.
       await sleep(100);
     }
   } catch (error) {
