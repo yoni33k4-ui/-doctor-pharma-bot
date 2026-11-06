@@ -30,7 +30,7 @@ const ADMIN_ID = String(
 const PORT = Number(process.env.PORT || 3000);
 
 // ========================================
-// LIENS DES BOUTONS
+// LIENS DES 4 BOUTONS
 // ========================================
 
 const TATO_URL =
@@ -46,11 +46,11 @@ const CONTACT_URL =
   "https://t.me/Doctor_commande33k";
 
 // ========================================
-// ADMINISTRATION
+// ADMINISTRATION DOCTOR PHARMA 33
 // ========================================
 
 const ADMIN_URL =
-  "https://screenshot-perfect-7051.lovable.app/admin";
+  "https://layer-aligner.lovable.app/admin";
 
 // ========================================
 // PHOTO DE BIENVENUE
@@ -147,7 +147,7 @@ const HOME_KEYBOARD = {
 };
 
 // ========================================
-// LES 4 BOUTONS EN GRILLE 2 X 2
+// BOUTONS EN GRILLE 2 X 2
 // ========================================
 
 function linksKeyboard() {
@@ -193,7 +193,7 @@ const WELCOME_TEXT = [
 ].join("\n");
 
 // ========================================
-// ENVOI DE LA PHOTO
+// ENVOYER LA PHOTO
 // ========================================
 
 async function sendPhoto(
@@ -254,7 +254,7 @@ async function sendPhoto(
 
 async function sendWelcome(chatId) {
 
-  // Afficher le bouton permanent Accueil
+  // Bouton permanent Accueil
   await sendMessage(
     chatId,
     "🏠 Accueil",
@@ -263,7 +263,7 @@ async function sendWelcome(chatId) {
     }
   );
 
-  // Envoyer le message avec les 4 boutons
+  // Photo et message de bienvenue
   if (fs.existsSync(PHOTO_PATH)) {
 
     await sendPhoto(
@@ -286,7 +286,7 @@ async function sendWelcome(chatId) {
 }
 
 // ========================================
-// ADMINISTRATION PRIVEE
+// ADMINISTRATION PRIVEE DOCTOR PHARMA
 // ========================================
 
 async function openAdmin(
@@ -309,7 +309,7 @@ async function openAdmin(
 
   await sendMessage(
     chatId,
-    "🔐 Administration DTP",
+    "🔐 Administration Doctor Pharma 33",
     {
       reply_markup: {
         inline_keyboard: [
@@ -343,7 +343,7 @@ async function handleUpdate(update) {
   const userId = message.from?.id;
   const text = message.text.trim();
 
-  // Commande de démarrage
+  // Démarrage
   if (
     /^\/start(?:@\w+)?(?:\s.*)?$/i.test(text)
   ) {
@@ -353,7 +353,7 @@ async function handleUpdate(update) {
 
   }
 
-  // Bouton permanent Accueil
+  // Bouton Accueil
   if (text === "🏠 Accueil") {
 
     await sendWelcome(chatId);
@@ -384,7 +384,7 @@ app.get("/", (req, res) => {
 
   res.status(200).json({
     status: "online",
-    service: "DTP Telegram Bot"
+    service: "Doctor Pharma 33 Bot"
   });
 
 });
@@ -419,10 +419,8 @@ app.post("/webhook", (req, res) => {
 
   }
 
-  // Répondre rapidement à Telegram
   res.sendStatus(200);
 
-  // Traiter le message
   handleUpdate(req.body).catch(error => {
 
     console.error(
@@ -454,12 +452,11 @@ async function setupBot() {
 
   });
 
-  // Commande admin disponible
   await telegram("setMyCommands", {
     commands: [
       {
         command: "admin",
-        description: "Administration"
+        description: "Administration Doctor Pharma"
       }
     ]
   });
@@ -487,7 +484,7 @@ app.listen(
       await setupBot();
 
       console.log(
-        "Bot Telegram prêt"
+        "Bot Telegram Doctor Pharma prêt"
       );
 
     } catch (error) {
