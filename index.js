@@ -5,6 +5,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 
 const app = express();
+
 app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
@@ -29,38 +30,27 @@ const ADMIN_ID = String(
 const PORT = Number(process.env.PORT || 3000);
 
 // ========================================
-// MINI-APPLICATION
+// LIENS DES BOUTONS
 // ========================================
 
-const CATALOGUE_URL =
-  "https://screenshot-perfect-7051.lovable.app";
+const TATO_URL =
+  "https://tato.im/doctorpharma33776";
+
+const TELEGRAM_CHANNEL_URL =
+  "https://t.me/+m304JfK-cfRiNmE0";
+
+const AVIS_URL =
+  "https://tato.im/doctoravis33";
+
+const CONTACT_URL =
+  "https://t.me/Doctor_commande33k";
+
+// ========================================
+// ADMINISTRATION
+// ========================================
 
 const ADMIN_URL =
   "https://screenshot-perfect-7051.lovable.app/admin";
-
-// ========================================
-// LES 4 BOUTONS
-// Renseigner les liens dans Render
-// ========================================
-
-const BUTTONS = [
-  {
-    text: "📱 Tato Talk",
-    url: process.env.TATO_URL
-  },
-  {
-    text: "⭐ Avis",
-    url: process.env.AVIS_URL
-  },
-  {
-    text: "💬 WhatsApp",
-    url: process.env.WHATSAPP_URL
-  },
-  {
-    text: "📞 Contact",
-    url: process.env.CONTACT_URL
-  }
-];
 
 // ========================================
 // PHOTO DE BIENVENUE
@@ -75,7 +65,7 @@ const PHOTO_PATH = path.join(
 );
 
 // ========================================
-// VALIDATION
+// VALIDATION DES VARIABLES
 // ========================================
 
 if (!TOKEN) {
@@ -88,6 +78,13 @@ if (!/^https:\/\/[^/]+$/.test(BASE_URL)) {
 
 if (!WEBHOOK_SECRET) {
   throw new Error("WEBHOOK_SECRET manquant");
+}
+
+if (
+  WEBHOOK_SECRET.length > 256 ||
+  !/^[A-Za-z0-9_-]+$/.test(WEBHOOK_SECRET)
+) {
+  throw new Error("WEBHOOK_SECRET invalide");
 }
 
 // ========================================
@@ -117,7 +114,15 @@ async function telegram(method, payload = {}) {
   return data.result;
 }
 
-async function sendMessage(chatId, text, extra = {}) {
+// ========================================
+// ENVOYER UN MESSAGE
+// ========================================
+
+async function sendMessage(
+  chatId,
+  text,
+  extra = {}
+) {
   return telegram("sendMessage", {
     chat_id: chatId,
     text,
@@ -142,44 +147,30 @@ const HOME_KEYBOARD = {
 };
 
 // ========================================
-// BOUTONS INLINE EN GRILLE
+// LES 4 BOUTONS EN GRILLE 2 X 2
 // ========================================
 
-function makeButton(button) {
-  if (
-    button.url &&
-    /^https:\/\//.test(button.url)
-  ) {
-    return {
-      text: button.text,
-      url: button.url
-    };
-  }
-
-  return {
-    text: button.text,
-    callback_data: "link_missing"
-  };
-}
-
-function catalogueKeyboard() {
+function linksKeyboard() {
   return {
     inline_keyboard: [
       [
-        makeButton(BUTTONS[0]),
-        makeButton(BUTTONS[1])
-      ],
-      [
-        makeButton(BUTTONS[2]),
-        makeButton(BUTTONS[3])
+        {
+          text: "📱 Canal Tato Talk",
+          url: TATO_URL
+        },
+        {
+          text: "📣 Canal Telegram",
+          url: TELEGRAM_CHANNEL_URL
+        }
       ],
       [
         {
-          text: "🛍️ OUVRIR LE CATALOGUE",
-          web_app: {
-            url: CATALOGUE_URL
-          },
-          style: "primary"
+          text: "⭐ Avis",
+          url: AVIS_URL
+        },
+        {
+          text: "📞 Contact",
+          url: CONTACT_URL
         }
       ]
     ]
@@ -198,10 +189,72 @@ const WELCOME_TEXT = [
   "📦 Livraison rapide : ✅",
   "📍 En main propre",
   "",
-  "👇 Découvrez nos différents espaces et notre catalogue."
+  "👇 Découvrez nos différents espaces."
 ].join("\n");
 
+// ========================================
+// ENVOI DE LA PHOTO
+// ========================================
+
+async function sendPhoto(
+  chatId,
+  caption,
+  keyboard
+) {
+  const photo = fs.readFileSync(PHOTO_PATH);
+
+  const form = new FormData();
+
+  form.append(
+    "chat_id",
+    String(chatId)
+  );
+
+  form.append(
+    "caption",
+    caption
+  );
+
+  form.append(
+    "reply_markup",
+    JSON.stringify(keyboard)
+  );
+
+  form.append(
+    "photo",
+    new Blob(
+      [photo],
+      { type: "image/png" }
+    ),
+    PHOTO_NAME
+  );
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${TOKEN}/sendPhoto`,
+    {
+      method: "POST",
+      body: form
+    }
+  );
+
+  const result = await response.json();
+
+  if (!result.ok) {
+    throw new Error(
+      `Telegram sendPhoto: ${result.description}`
+    );
+  }
+
+  return result.result;
+}
+
+// ========================================
+// AFFICHER L'ACCUEIL
+// ========================================
+
 async function sendWelcome(chatId) {
+
+  // Afficher le bouton permanent Accueil
   await sendMessage(
     chatId,
     "🏠 Accueil",
@@ -210,56 +263,47 @@ async function sendWelcome(chatId) {
     }
   );
 
+  // Envoyer le message avec les 4 boutons
   if (fs.existsSync(PHOTO_PATH)) {
-    const photo = fs.readFileSync(PHOTO_PATH);
-    const form = new FormData();
 
-    form.append("chat_id", String(chatId));
-    form.append("caption", WELCOME_TEXT);
-    form.append(
-      "reply_markup",
-      JSON.stringify(catalogueKeyboard())
-    );
-    form.append(
-      "photo",
-      new Blob([photo], { type: "image/png" }),
-      PHOTO_NAME
+    await sendPhoto(
+      chatId,
+      WELCOME_TEXT,
+      linksKeyboard()
     );
 
-    const response = await fetch(
-      `https://api.telegram.org/bot${TOKEN}/sendPhoto`,
-      {
-        method: "POST",
-        body: form
-      }
-    );
-
-    const result = await response.json();
-
-    if (!result.ok) {
-      throw new Error(result.description);
-    }
   } else {
+
     await sendMessage(
       chatId,
       WELCOME_TEXT,
       {
-        reply_markup: catalogueKeyboard()
+        reply_markup: linksKeyboard()
       }
     );
+
   }
 }
 
 // ========================================
-// ADMINISTRATION
+// ADMINISTRATION PRIVEE
 // ========================================
 
-async function openAdmin(chatId, userId) {
-  if (String(userId) !== ADMIN_ID) {
+async function openAdmin(
+  chatId,
+  userId
+) {
+
+  if (
+    !ADMIN_ID ||
+    String(userId) !== ADMIN_ID
+  ) {
+
     await sendMessage(
       chatId,
       "⛔ Accès réservé à l'administrateur."
     );
+
     return;
   }
 
@@ -284,21 +328,10 @@ async function openAdmin(chatId, userId) {
 }
 
 // ========================================
-// TRAITEMENT DES MESSAGES
+// TRAITEMENT DES COMMANDES
 // ========================================
 
 async function handleUpdate(update) {
-  if (update.callback_query) {
-    const query = update.callback_query;
-
-    await telegram("answerCallbackQuery", {
-      callback_query_id: query.id,
-      text: "Lien non configuré.",
-      show_alert: true
-    });
-
-    return;
-  }
 
   const message = update.message;
 
@@ -310,75 +343,118 @@ async function handleUpdate(update) {
   const userId = message.from?.id;
   const text = message.text.trim();
 
-  if (text === "/start") {
+  // Commande de démarrage
+  if (
+    /^\/start(?:@\w+)?(?:\s.*)?$/i.test(text)
+  ) {
+
     await sendWelcome(chatId);
     return;
+
   }
 
+  // Bouton permanent Accueil
   if (text === "🏠 Accueil") {
+
     await sendWelcome(chatId);
     return;
+
   }
 
-  if (text === "/admin") {
-    await openAdmin(chatId, userId);
+  // Administration
+  if (
+    /^\/admin(?:@\w+)?$/i.test(text)
+  ) {
+
+    await openAdmin(
+      chatId,
+      userId
+    );
+
     return;
+
   }
 }
 
 // ========================================
-// PROTECTION WEBHOOK
+// ROUTE DE SANTE RENDER
 // ========================================
 
 app.get("/", (req, res) => {
+
   res.status(200).json({
     status: "online",
     service: "DTP Telegram Bot"
   });
+
 });
 
+// ========================================
+// WEBHOOK SECURISE
+// ========================================
+
 app.post("/webhook", (req, res) => {
-  const secret =
-    req.headers["x-telegram-bot-api-secret-token"];
 
   const supplied = Buffer.from(
-    String(secret || "")
+    String(
+      req.headers[
+        "x-telegram-bot-api-secret-token"
+      ] || ""
+    )
   );
 
-  const expected = Buffer.from(WEBHOOK_SECRET);
+  const expected = Buffer.from(
+    WEBHOOK_SECRET
+  );
 
   if (
     supplied.length !== expected.length ||
-    !crypto.timingSafeEqual(supplied, expected)
+    !crypto.timingSafeEqual(
+      supplied,
+      expected
+    )
   ) {
+
     return res.sendStatus(403);
+
   }
 
+  // Répondre rapidement à Telegram
   res.sendStatus(200);
 
+  // Traiter le message
   handleUpdate(req.body).catch(error => {
+
     console.error(
-      "Erreur update:",
+      "Erreur Telegram:",
       error.message
     );
+
   });
+
 });
 
 // ========================================
-// INITIALISATION TELEGRAM
+// CONFIGURATION DU WEBHOOK
 // ========================================
 
 async function setupBot() {
+
   await telegram("setWebhook", {
+
     url: `${BASE_URL}/webhook`,
+
     secret_token: WEBHOOK_SECRET,
+
     allowed_updates: [
-      "message",
-      "callback_query"
+      "message"
     ],
+
     drop_pending_updates: false
+
   });
 
+  // Commande admin disponible
   await telegram("setMyCommands", {
     commands: [
       {
@@ -388,23 +464,40 @@ async function setupBot() {
     ]
   });
 
-  console.log("Webhook Telegram configuré");
+  console.log(
+    "Webhook Telegram configuré"
+  );
 }
 
 // ========================================
-// DEMARRAGE
+// DEMARRAGE DU SERVEUR
 // ========================================
 
-app.listen(PORT, "0.0.0.0", async () => {
-  console.log(`Serveur actif sur ${PORT}`);
+app.listen(
+  PORT,
+  "0.0.0.0",
+  async () => {
 
-  try {
-    await setupBot();
-    console.log("Bot Telegram prêt");
-  } catch (error) {
-    console.error(
-      "Erreur initialisation:",
-      error.message
+    console.log(
+      `Serveur actif sur le port ${PORT}`
     );
+
+    try {
+
+      await setupBot();
+
+      console.log(
+        "Bot Telegram prêt"
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Erreur initialisation:",
+        error.message
+      );
+
+    }
+
   }
-});
+);
