@@ -1,1275 +1,351 @@
 
-"use strict";
-
 const express = require("express");
 const crypto = require("node:crypto");
 
 const app = express();
+
 app.disable("x-powered-by");
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "100kb" }));
 
-// ==========================================
-// CONFIGURATION DOCTOR PHARMA 33
-// ==========================================
+// ======================================
+// CONFIGURATION
+// ======================================
 
-const BOT_TOKEN = (process.env.BOT_TOKEN || "").trim();
-const ADMIN_ID = String(process.env.ADMIN_ID || "").trim();
-
-const SUPABASE_URL = (process.env.SUPABASE_URL || "")
-  .trim()
-  .replace(/\/$/, "");
-
-const SUPABASE_KEY = (
-  process.env.SUPABASE_SECRET_KEY ||
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  ""
-).trim();
+const TOKEN = (process.env.BOT_TOKEN || "").trim();
 
 const BASE_URL = (process.env.BASE_URL || "")
   .trim()
   .replace(/\/$/, "");
 
-const MINI_APP_URL = (
-  process.env.MINI_APP_URL ||
-  "https://layer-aligner.lovable.app"
-).trim().replace(/\/$/, "");
+const WEBHOOK_SECRET = (
+  process.env.WEBHOOK_SECRET || ""
+).trim();
 
-const ENCRYPTION_KEY = (
-  process.env.MESSAGE_ENCRYPTION_KEY || ""
+const ADMIN_ID = (
+  process.env.ADMIN_ID || ""
 ).trim();
 
 const PORT = Number(process.env.PORT || 3000);
-const BOT_USERNAME = "Doctorp33bot";
 
-const sleep = ms =>
-  new Promise(resolve => setTimeout(resolve, ms));
+// ======================================
+// LIENS
+// ======================================
 
-const checks = {
-  BOT_TOKEN: /^\d+:[A-Za-z0-9_-]+$/.test(BOT_TOKEN),
-  ADMIN_ID: /^\d+$/.test(ADMIN_ID),
-  SUPABASE_URL:
-    /^https:\/\/[^/]+\.supabase\.co$/.test(SUPABASE_URL),
-  SUPABASE_SECRET_KEY: Boolean(SUPABASE_KEY),
-  BASE_URL: /^https:\/\/[^/]+$/.test(BASE_URL),
-  MINI_APP_URL: /^https:\/\/[^/]+$/.test(MINI_APP_URL),
-  MESSAGE_ENCRYPTION_KEY:
-    /^[a-f0-9]{64}$/i.test(ENCRYPTION_KEY)
+const CONTACT_URL =
+  "https://t.me/Doctor_commande33k";
+
+const TELEGRAM_URL =
+  "https://t.me/+m304JfK-cfRiNmE0";
+
+const TATO_URL =
+  "https://tato.im/doctorpharma33776";
+
+const CATALOGUE_URL =
+  "https://tato.im/doctorpharma33776";
+
+const AVIS_URL =
+  "https://tato.im/doctoravis33";
+
+const ADMIN_URL =
+  "https://screenshot-perfect-7051.lovable.app/admin";
+
+// ======================================
+// MESSAGE DE BIENVENUE
+// ======================================
+
+const WELCOME_MESSAGE = [
+  "✨ DTP — Saison 2026-2027 ✨",
+  "",
+  "🏪 Toute nos références sont enfin disponibles sur Telegram ! 🏪🔥",
+  "",
+  "📦 Livraison rapide : ✅",
+  "📍 En main propre : ✅",
+  "📞 Accueil : Une équipe réactive et à l’écoute ✅",
+  "",
+  "Nous contacter :",
+  CONTACT_URL
+].join("\n");
+
+// ======================================
+// 5 BOUTONS PRINCIPAUX
+// ======================================
+
+const MAIN_BUTTONS = {
+  inline_keyboard: [
+    [
+      {
+        text: "Contact 📱",
+        url: CONTACT_URL
+      }
+    ],
+    [
+      {
+        text: "Canal Telegram 📣",
+        url: TELEGRAM_URL
+      }
+    ],
+    [
+      {
+        text: "Canal Tato Talk 📢",
+        url: TATO_URL
+      }
+    ],
+    [
+      {
+        text: "Catalogue 🛍️",
+        url: CATALOGUE_URL
+      }
+    ],
+    [
+      {
+        text: "Avis ⭐",
+        url: AVIS_URL
+      }
+    ]
+  ]
 };
 
-const invalid = Object.entries(checks)
-  .filter(([, valid]) => !valid)
-  .map(([name]) => name);
+// ======================================
+// BOUTON GRIS PERMANENT
+// ======================================
 
-if (invalid.length) {
-  console.error(
-    "Variables Render absentes ou invalides :",
-    invalid.join(", ")
-  );
-  process.exit(1);
-}
+const HOME_KEYBOARD = {
+  keyboard: [
+    [
+      {
+        text: "🏠 Accueil"
+      }
+    ]
+  ],
+  resize_keyboard: true,
+  is_persistent: true
+};
 
-const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-const AES_KEY = Buffer.from(ENCRYPTION_KEY, "hex");
+// ======================================
+// APPELS API TELEGRAM
+// ======================================
 
-const WEBHOOK_SECRET = crypto
-  .createHmac("sha256", BOT_TOKEN)
-  .update("doctor-p33-webhook-v4")
-  .digest("hex");
-
-function safeEqual(a, b) {
-  const x = Buffer.from(String(a));
-  const y = Buffer.from(String(b));
-
-  return x.length === y.length &&
-    crypto.timingSafeEqual(x, y);
-}
-
-function validUUID(id) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    .test(String(id));
-}
-
-function apiError(res, error, status = 500) {
-  console.error("API:", error.message);
-
-  return res.status(status).json({
-    ok: false,
-    error: status === 500
-      ? "Erreur interne du serveur"
-      : String(error.message || error)
-  });
-}
-
-// ==========================================
-// CHIFFREMENT AES-256-GCM
-// ==========================================
-
-function encrypt(value) {
-  const iv = crypto.randomBytes(12);
-
-  const cipher = crypto.createCipheriv(
-    "aes-256-gcm",
-    AES_KEY,
-    iv
-  );
-
-  const content = Buffer.concat([
-    cipher.update(JSON.stringify(value), "utf8"),
-    cipher.final()
-  ]);
-
-  return [
-    iv.toString("hex"),
-    cipher.getAuthTag().toString("hex"),
-    content.toString("hex")
-  ].join(".");
-}
-
-function decrypt(value) {
-  const parts = String(value).split(".");
-
-  if (parts.length !== 3) {
-    throw new Error("Brouillon chiffré invalide");
-  }
-
-  const [iv, tag, content] = parts;
-
-  const decipher = crypto.createDecipheriv(
-    "aes-256-gcm",
-    AES_KEY,
-    Buffer.from(iv, "hex")
-  );
-
-  decipher.setAuthTag(Buffer.from(tag, "hex"));
-
-  return JSON.parse(
-    Buffer.concat([
-      decipher.update(Buffer.from(content, "hex")),
-      decipher.final()
-    ]).toString("utf8")
-  );
-}
-
-// ==========================================
-// TELEGRAM API
-// ==========================================
-
-async function telegram(method, body = {}) {
+async function telegram(method, payload = {}) {
   const response = await fetch(
-    `${TG_API}/${method}`,
+    `https://api.telegram.org/bot${TOKEN}/${method}`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30000)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000)
     }
   );
 
   const result = await response.json();
 
   if (!result.ok) {
-    const error = new Error(
-      result.description || "Erreur Telegram"
+    throw new Error(
+      `${method}: ${result.description}`
     );
-
-    error.code = result.error_code;
-    error.retryAfter =
-      result.parameters?.retry_after || 0;
-
-    throw error;
   }
 
   return result.result;
 }
 
-// ==========================================
-// SUPABASE API
-// ==========================================
+// ======================================
+// AFFICHAGE ACCUEIL
+// ======================================
 
-async function db(
-  table,
-  method = "GET",
-  body = null,
-  query = "",
-  prefer = "return=representation"
-) {
-  const response = await fetch(
-    `${SUPABASE_URL}/rest/v1/${table}${query}`,
-    {
-      method,
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: prefer
-      },
-      body: body === null
-        ? undefined
-        : JSON.stringify(body),
-      signal: AbortSignal.timeout(20000)
+async function showHome(chatId) {
+
+  // Affiche le bouton gris permanent
+  await telegram("sendMessage", {
+    chat_id: chatId,
+    text: "🏠 Accueil",
+    reply_markup: HOME_KEYBOARD
+  });
+
+  // Affiche le message et les 5 boutons
+  await telegram("sendMessage", {
+    chat_id: chatId,
+    text: WELCOME_MESSAGE,
+    reply_markup: MAIN_BUTTONS,
+    link_preview_options: {
+      is_disabled: true
     }
-  );
-
-  const raw = await response.text();
-
-  if (!response.ok) {
-    throw new Error(
-      `Supabase ${response.status}: ${raw}`
-    );
-  }
-
-  return raw ? JSON.parse(raw) : [];
+  });
 }
 
-async function rpc(name, params = {}) {
-  const response = await fetch(
-    `${SUPABASE_URL}/rest/v1/rpc/${name}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(params),
-      signal: AbortSignal.timeout(20000)
-    }
-  );
+// ======================================
+// COMMANDE ADMIN
+// ======================================
 
-  const raw = await response.text();
+async function showAdmin(message) {
 
-  if (!response.ok) {
-    throw new Error(
-      `RPC ${name}: ${response.status} ${raw}`
-    );
-  }
+  const chatId = message.chat.id;
+  const userId = String(message.from?.id || "");
 
-  return raw ? JSON.parse(raw) : null;
-}
-
-// ==========================================
-// AUTHENTIFICATION ADMIN TELEGRAM
-// ==========================================
-
-function verifyInitData(initData) {
   if (
-    typeof initData !== "string" ||
-    !initData ||
-    initData.length > 8192
+    !ADMIN_ID ||
+    userId !== ADMIN_ID ||
+    message.chat.type !== "private"
   ) {
-    return null;
-  }
-
-  try {
-    const params = new URLSearchParams(initData);
-    const hash = params.get("hash");
-
-    if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
-      return null;
-    }
-
-    params.delete("hash");
-    params.delete("signature");
-
-    const checkString = [...params.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${key}=${value}`)
-      .join("\n");
-
-    const secret = crypto
-      .createHmac("sha256", "WebAppData")
-      .update(BOT_TOKEN)
-      .digest();
-
-    const calculated = crypto
-      .createHmac("sha256", secret)
-      .update(checkString)
-      .digest("hex");
-
-    if (!safeEqual(hash, calculated)) {
-      return null;
-    }
-
-    const authDate = Number(
-      params.get("auth_date")
-    );
-
-    const now = Math.floor(Date.now() / 1000);
-
-    if (
-      !Number.isFinite(authDate) ||
-      authDate > now + 60 ||
-      now - authDate > 3600
-    ) {
-      return null;
-    }
-
-    const user = JSON.parse(
-      params.get("user") || "{}"
-    );
-
-    if (String(user.id) !== ADMIN_ID) {
-      return null;
-    }
-
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function adminAuth(req, res, next) {
-  const user = verifyInitData(
-    req.get("X-Telegram-Init-Data")
-  );
-
-  if (!user) {
-    return res.status(403).json({
-      ok: false,
-      error: "Accès administrateur refusé"
+    await telegram("sendMessage", {
+      chat_id: chatId,
+      text: "⛔ Accès non autorisé."
     });
+    return;
   }
 
-  req.admin = user;
-  next();
-}
-
-// ==========================================
-// CORS ADMINISTRATION LOVABLE
-// ==========================================
-
-app.use("/api/admin", (req, res, next) => {
-  const allowed = new URL(MINI_APP_URL).origin;
-  const origin = req.get("Origin");
-
-  if (origin === allowed) {
-    res.setHeader(
-      "Access-Control-Allow-Origin",
-      allowed
-    );
-
-    res.setHeader("Vary", "Origin");
-
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, X-Telegram-Init-Data"
-    );
-
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PATCH, DELETE, OPTIONS"
-    );
-  }
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(
-      origin === allowed ? 204 : 403
-    );
-  }
-
-  next();
-});
-
-// ==========================================
-// UTILISATEURS
-// ==========================================
-
-async function registerUser(user) {
-  const id = String(user.id);
-
-  const existing = await db(
-    "bot_users",
-    "GET",
-    null,
-    `?chat_id=eq.${id}&select=chat_id`
-  );
-
-  const profile = {
-    first_name: user.first_name || "",
-    last_name: user.last_name || "",
-    username: user.username || ""
-  };
-
-  if (existing.length === 0) {
-    await db(
-      "bot_users",
-      "POST",
-      {
-        chat_id: id,
-        telegram_id: id,
-        active: false,
-        subscribed: false,
-        blocked: false,
-        ...profile
-      }
-    );
-  } else {
-    await db(
-      "bot_users",
-      "PATCH",
-      {
-        telegram_id: id,
-        ...profile,
-        updated_at: new Date().toISOString()
-      },
-      `?chat_id=eq.${id}`
-    );
-  }
-}
-
-async function setSubscription(id, subscribed) {
-  await db(
-    "bot_users",
-    "PATCH",
-    {
-      subscribed,
-      active: subscribed,
-      blocked: false,
-      updated_at: new Date().toISOString()
-    },
-    `?chat_id=eq.${String(id)}`
-  );
-}
-
-async function getAllUsers() {
-  const users = [];
-  const limit = 500;
-  let offset = 0;
-
-  while (true) {
-    const rows = await db(
-      "bot_users",
-      "GET",
-      null,
-      "?select=chat_id,telegram_id," +
-      "first_name,last_name,username," +
-      "subscribed,blocked" +
-      `&order=chat_id.asc&limit=${limit}` +
-      `&offset=${offset}`
-    );
-
-    users.push(...rows);
-
-    if (rows.length < limit) {
-      break;
+  await telegram("sendMessage", {
+    chat_id: chatId,
+    text: "⚙️ Administration Doctor Pharma 33",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: "⚙️ Ouvrir administration",
+            url: ADMIN_URL
+          }
+        ]
+      ]
     }
+  });
+}
 
-    offset += limit;
+// ======================================
+// GESTION DES MESSAGES
+// ======================================
+
+async function handleUpdate(update) {
+
+  const message = update.message;
+
+  if (!message || !message.text) {
+    return;
   }
 
-  return users;
+  // Uniquement les conversations privées
+  if (message.chat.type !== "private") {
+    return;
+  }
+
+  const text = message.text.trim();
+  const chatId = message.chat.id;
+
+  // Démarrage initial Telegram
+  if (/^\/start(?:@\w+)?(?:\s|$)/i.test(text)) {
+    await showHome(chatId);
+    return;
+  }
+
+  // Bouton gris permanent
+  if (text === "🏠 Accueil") {
+    await showHome(chatId);
+    return;
+  }
+
+  // Administration
+  if (/^\/admin(?:@\w+)?$/i.test(text)) {
+    await showAdmin(message);
+    return;
+  }
 }
 
-// ==========================================
-// ACCUEIL
-// ==========================================
+// ======================================
+// WEBHOOK
+// ======================================
 
-const welcomeText =
-  "<b>Bienvenue chez Doctor Pharma 33 👋🇫🇷</b>\n" +
-  "⭐️ Saison 2026-2027 ⭐️\n\n" +
-  "Les références du Doctor sont enfin " +
-  "disponibles sur Telegram ! 🔥\n\n" +
-  "👇 Découvrez notre boutique.";
+app.post("/webhook", async (req, res) => {
 
-const welcomeButtons = {
-  inline_keyboard: [
-    [{
-      text: "🛍️ Ouvrir la boutique",
-      web_app: {
-        url: MINI_APP_URL
-      }
-    }],
-    [{
-      text: "🔔 Recevoir les annonces",
-      callback_data: "subscribe"
-    }],
-    [{
-      text: "🔕 Se désabonner",
-      callback_data: "unsubscribe"
-    }]
-  ]
-};
-
-const homeKeyboard = {
-  keyboard: [[{
-    text: "🏠 Accueil"
-  }]],
-  resize_keyboard: true,
-  is_persistent: true
-};
-
-async function sendWelcome(chatId) {
-  await telegram("sendMessage", {
-    chat_id: chatId,
-    text: welcomeText,
-    parse_mode: "HTML",
-    reply_markup: welcomeButtons
-  });
-
-  await telegram("sendMessage", {
-    chat_id: chatId,
-    text: "🏠 Menu principal",
-    reply_markup: homeKeyboard
-  });
-}
-
-// ==========================================
-// WEBHOOK TELEGRAM
-// ==========================================
-
-app.post("/telegram/webhook", async (req, res) => {
-  const secret = req.get(
+  const receivedSecret = req.get(
     "X-Telegram-Bot-Api-Secret-Token"
-  );
+  ) || "";
 
-  if (!secret || !safeEqual(secret, WEBHOOK_SECRET)) {
+  const expected = Buffer.from(WEBHOOK_SECRET);
+  const received = Buffer.from(receivedSecret);
+
+  if (
+    !WEBHOOK_SECRET ||
+    expected.length !== received.length ||
+    !crypto.timingSafeEqual(expected, received)
+  ) {
     return res.sendStatus(403);
   }
 
-  const update = req.body;
-
-  if (!Number.isSafeInteger(update?.update_id)) {
-    return res.sendStatus(400);
-  }
+  // Confirmer rapidement la réception
+  res.sendStatus(200);
 
   try {
-    const claimed = await rpc(
-      "claim_telegram_update",
-      { p_update_id: update.update_id }
-    );
-
-    if (!claimed) {
-      return res.sendStatus(200);
-    }
-
-    const message = update.message;
-
-    if (
-      message?.from &&
-      message.chat?.type === "private"
-    ) {
-      const text = (message.text || "").trim();
-      const chatId = message.chat.id;
-
-      if (
-        text === "/start" ||
-        text.startsWith("/start ") ||
-        text === "🏠 Accueil"
-      ) {
-        await registerUser(message.from);
-        await sendWelcome(chatId);
-      }
-
-      if (text === "/admin") {
-        if (String(message.from.id) !== ADMIN_ID) {
-          await telegram("sendMessage", {
-            chat_id: chatId,
-            text: "⛔ Accès administrateur refusé."
-          });
-        } else {
-          await telegram("sendMessage", {
-            chat_id: chatId,
-            text: "🔐 Administration Doctor Pharma 33",
-            reply_markup: {
-              inline_keyboard: [[{
-                text: "⚙️ Administration",
-                web_app: {
-                  url: `${MINI_APP_URL}/admin`
-                }
-              }]]
-            }
-          });
-        }
-      }
-
-      if (text === "/stats") {
-        if (String(message.from.id) !== ADMIN_ID) {
-          await telegram("sendMessage", {
-            chat_id: chatId,
-            text: "⛔ Accès administrateur refusé."
-          });
-        } else {
-          const users = await getAllUsers();
-
-          const subscribed = users.filter(
-            u => u.subscribed && !u.blocked
-          ).length;
-
-          const blocked = users.filter(
-            u => u.blocked
-          ).length;
-
-          const lines = [
-            "📊 STATISTIQUES DOCTOR PHARMA 33",
-            "",
-            `👥 Utilisateurs : ${users.length}`,
-            `🔔 Abonnés : ${subscribed}`,
-            `🚫 Bloqués : ${blocked}`
-          ];
-
-          await telegram("sendMessage", {
-            chat_id: chatId,
-            text: lines.join("\n")
-          });
-        }
-      }
-    }
-
-    const callback = update.callback_query;
-
-    if (
-      callback &&
-      ["subscribe", "unsubscribe"].includes(
-        callback.data
-      ) &&
-      callback.message?.chat?.type === "private"
-    ) {
-      await registerUser(callback.from);
-
-      const subscribed =
-        callback.data === "subscribe";
-
-      await setSubscription(
-        callback.from.id,
-        subscribed
-      );
-
-      await telegram("answerCallbackQuery", {
-        callback_query_id: callback.id,
-        text: subscribed
-          ? "Annonces activées ✅"
-          : "Annonces désactivées ✅",
-        show_alert: true
-      });
-    }
-
-    await rpc("complete_telegram_update", {
-      p_update_id: update.update_id
-    });
-
-    return res.sendStatus(200);
-  } catch (error) {
-    console.error("Webhook:", error.message);
-    return res.sendStatus(500);
-  }
-});
-
-// ==========================================
-// SANTÉ DU BOT
-// ==========================================
-
-app.get("/health", (req, res) => {
-  res.json({
-    ok: true,
-    bot: BOT_USERNAME,
-    uptime: Math.floor(process.uptime())
-  });
-});
-
-// ==========================================
-// AUTHENTIFICATION ADMIN
-// ==========================================
-
-for (const route of [
-  "/api/admin/verify",
-  "/api/admin/session"
-]) {
-  app.post(route, adminAuth, (req, res) => {
-    res.json({
-      ok: true,
-      admin: true,
-      user: {
-        id: req.admin.id,
-        first_name: req.admin.first_name
-      }
-    });
-  });
-}
-
-// ==========================================
-// SANTÉ ADMINISTRATION
-// ==========================================
-
-app.get(
-  "/api/admin/health",
-  adminAuth,
-  async (req, res) => {
-    try {
-      const [bot, webhook, users] =
-        await Promise.all([
-          telegram("getMe"),
-          telegram("getWebhookInfo"),
-          getAllUsers()
-        ]);
-
-      res.json({
-        ok: true,
-        bot: {
-          username: bot.username,
-          active: true
-        },
-        webhook: {
-          configured: Boolean(webhook.url),
-          pending: webhook.pending_update_count,
-          last_error:
-            webhook.last_error_message || null
-        },
-        supabase: "connected",
-        users: {
-          total: users.length,
-          subscribed: users.filter(
-            u => u.subscribed && !u.blocked
-          ).length,
-          blocked: users.filter(
-            u => u.blocked
-          ).length
-        },
-        uptime: Math.floor(process.uptime())
-      });
-    } catch (error) {
-      apiError(res, error);
-    }
-  }
-);
-
-// ==========================================
-// STATISTIQUES ADMIN
-// ==========================================
-
-app.get(
-  "/api/admin/stats",
-  adminAuth,
-  async (req, res) => {
-    try {
-      const users = await getAllUsers();
-
-      res.json({
-        ok: true,
-        users,
-        total_returned: users.length
-      });
-    } catch (error) {
-      apiError(res, error);
-    }
-  }
-);
-
-// ==========================================
-// VALIDATION DES MESSAGES
-// ==========================================
-
-function validateDraft(input) {
-  const text = String(
-    input?.text || ""
-  ).trim();
-
-  if (!text || text.length > 4096) {
-    throw new Error(
-      "Le message doit contenir 1 à 4096 caractères"
-    );
-  }
-
-  const suppliedButtons = input?.buttons || [];
-
-  if (
-    !Array.isArray(suppliedButtons) ||
-    suppliedButtons.length > 4
-  ) {
-    throw new Error(
-      "Maximum quatre boutons autorisés"
-    );
-  }
-
-  const buttons = suppliedButtons.map(button => {
-    const label = String(
-      button.label || button.text || ""
-    ).trim();
-
-    const url = String(
-      button.url || ""
-    ).trim();
-
-    if (!label || label.length > 64) {
-      throw new Error(
-        "Nom de bouton invalide"
-      );
-    }
-
-    let parsed;
-
-    try {
-      parsed = new URL(url);
-    } catch {
-      throw new Error("Lien invalide");
-    }
-
-    if (
-      !["https:", "http:"].includes(
-        parsed.protocol
-      )
-    ) {
-      throw new Error(
-        "Lien HTTP ou HTTPS obligatoire"
-      );
-    }
-
-    return { label, url };
-  });
-
-  return { text, buttons };
-}
-
-function telegramButtons(buttons) {
-  if (!buttons?.length) {
-    return undefined;
-  }
-
-  return {
-    inline_keyboard: buttons.map(button => [{
-      text: button.label,
-      url: button.url
-    }])
-  };
-}
-
-// ==========================================
-// CRÉER UN BROUILLON CHIFFRÉ
-// ==========================================
-
-app.post(
-  "/api/admin/messages",
-  adminAuth,
-  async (req, res) => {
-    try {
-      const draft = validateDraft(req.body);
-
-      const rows = await db(
-        "message_drafts",
-        "POST",
-        {
-          encrypted_content: encrypt(draft),
-          status: "draft",
-          created_by: ADMIN_ID
-        }
-      );
-
-      res.json({
-        ok: true,
-        message: {
-          id: rows[0].id,
-          ...draft,
-          status: "draft"
-        }
-      });
-    } catch (error) {
-      apiError(res, error, 400);
-    }
-  }
-);
-
-// ==========================================
-// LISTER LES BROUILLONS
-// ==========================================
-
-app.get(
-  "/api/admin/messages",
-  adminAuth,
-  async (req, res) => {
-    try {
-      const rows = await db(
-        "message_drafts",
-        "GET",
-        null,
-        "?select=*&order=created_at.desc&limit=100"
-      );
-
-      const messages = rows.map(row => ({
-        id: row.id,
-        status: row.status,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        ...decrypt(row.encrypted_content)
-      }));
-
-      res.json({
-        ok: true,
-        messages
-      });
-    } catch (error) {
-      apiError(res, error);
-    }
-  }
-);
-
-// ==========================================
-// MODIFIER UN BROUILLON
-// ==========================================
-
-app.patch(
-  "/api/admin/messages/:id",
-  adminAuth,
-  async (req, res) => {
-    try {
-      const id = req.params.id;
-
-      if (!validUUID(id)) {
-        return apiError(
-          res,
-          new Error("ID invalide"),
-          400
-        );
-      }
-
-      const draft = validateDraft(req.body);
-
-      const rows = await db(
-        "message_drafts",
-        "PATCH",
-        {
-          encrypted_content: encrypt(draft),
-          updated_at: new Date().toISOString()
-        },
-        `?id=eq.${id}&status=eq.draft`
-      );
-
-      if (!rows.length) {
-        return apiError(
-          res,
-          new Error("Brouillon non modifiable"),
-          409
-        );
-      }
-
-      res.json({
-        ok: true,
-        message: {
-          id,
-          ...draft,
-          status: "draft"
-        }
-      });
-    } catch (error) {
-      apiError(res, error, 400);
-    }
-  }
-);
-
-// ==========================================
-// SUPPRIMER UN BROUILLON
-// ==========================================
-
-app.delete(
-  "/api/admin/messages/:id",
-  adminAuth,
-  async (req, res) => {
-    try {
-      const id = req.params.id;
-
-      if (!validUUID(id)) {
-        return apiError(
-          res,
-          new Error("ID invalide"),
-          400
-        );
-      }
-
-      const rows = await db(
-        "message_drafts",
-        "DELETE",
-        null,
-        `?id=eq.${id}&status=eq.draft`
-      );
-
-      if (!rows.length) {
-        return apiError(
-          res,
-          new Error("Brouillon non supprimable"),
-          409
-        );
-      }
-
-      res.json({ ok: true });
-    } catch (error) {
-      apiError(res, error);
-    }
-  }
-);
-
-// ==========================================
-// ENVOI MANUEL CONFIRMÉ
-// ==========================================
-
-app.post(
-  "/api/admin/messages/:id/send",
-  adminAuth,
-  async (req, res) => {
-    try {
-      const id = req.params.id;
-
-      if (!validUUID(id)) {
-        return apiError(
-          res,
-          new Error("ID invalide"),
-          400
-        );
-      }
-
-      if (req.body?.confirm !== true) {
-        return apiError(
-          res,
-          new Error(
-            "Confirmation explicite obligatoire"
-          ),
-          400
-        );
-      }
-
-      const result = await rpc(
-        "start_manual_broadcast",
-        { p_message_id: id }
-      );
-
-      if (!result?.ok) {
-        return apiError(
-          res,
-          new Error(
-            result?.error || "Envoi impossible"
-          ),
-          409
-        );
-      }
-
-      res.json({
-        ok: true,
-        status: "queued",
-        broadcast_id: result.broadcast_id,
-        recipients: result.recipients,
-        message:
-          "Diffusion manuelle enregistrée"
-      });
-    } catch (error) {
-      apiError(res, error);
-    }
-  }
-);
-
-// ==========================================
-// HISTORIQUE DES DIFFUSIONS
-// ==========================================
-
-app.get(
-  "/api/admin/broadcasts",
-  adminAuth,
-  async (req, res) => {
-    try {
-      const rows = await db(
-        "broadcasts",
-        "GET",
-        null,
-        "?select=*&order=created_at.desc&limit=100"
-      );
-
-      res.json({
-        ok: true,
-        broadcasts: rows
-      });
-    } catch (error) {
-      apiError(res, error);
-    }
-  }
-);
-
-// ==========================================
-// FILE D'ENVOI
-// ==========================================
-
-let workerBusy = false;
-
-async function processQueue() {
-  if (workerBusy) return;
-
-  workerBusy = true;
-
-  try {
-    const jobs = await rpc(
-      "claim_broadcast_jobs",
-      { p_limit: 10 }
-    );
-
-    for (const job of jobs || []) {
-      try {
-        const users = await db(
-          "bot_users",
-          "GET",
-          null,
-          `?telegram_id=eq.${job.telegram_id}` +
-          "&subscribed=eq.true&blocked=eq.false" +
-          "&select=telegram_id"
-        );
-
-        if (!users.length) {
-          await rpc("finish_broadcast_job", {
-            p_job_id: job.id,
-            p_status: "skipped",
-            p_error: "Non abonné"
-          });
-          continue;
-        }
-
-        const drafts = await db(
-          "message_drafts",
-          "GET",
-          null,
-          `?id=eq.${job.message_id}` +
-          "&select=encrypted_content"
-        );
-
-        if (!drafts.length) {
-          throw new Error(
-            "Brouillon introuvable"
-          );
-        }
-
-        const content = decrypt(
-          drafts[0].encrypted_content
-        );
-
-        let delivered = false;
-
-        for (
-          let attempt = 0;
-          attempt < 3;
-          attempt++
-        ) {
-          try {
-            await telegram("sendMessage", {
-              chat_id: job.telegram_id,
-              text: content.text,
-              reply_markup: telegramButtons(
-                content.buttons
-              )
-            });
-
-            delivered = true;
-            break;
-          } catch (error) {
-            if (error.code === 403) {
-              await db(
-                "bot_users",
-                "PATCH",
-                {
-                  subscribed: false,
-                  blocked: true,
-                  active: false
-                },
-                `?telegram_id=eq.${job.telegram_id}`
-              );
-
-              throw error;
-            }
-
-            if (
-              error.code === 429 &&
-              attempt < 2
-            ) {
-              await sleep(
-                Math.min(
-                  Number(error.retryAfter) || 5,
-                  60
-                ) * 1000
-              );
-
-              continue;
-            }
-
-            throw error;
-          }
-        }
-
-        if (delivered) {
-          await rpc("finish_broadcast_job", {
-            p_job_id: job.id,
-            p_status: "sent",
-            p_error: null
-          });
-        }
-      } catch (error) {
-        console.error(
-          "Erreur diffusion:",
-          error.message
-        );
-
-        await rpc(
-          "finish_broadcast_job",
-          {
-            p_job_id: job.id,
-            p_status: "failed",
-            p_error: String(
-              error.message
-            ).slice(0, 300)
-          }
-        ).catch(console.error);
-      }
-
-      // Temporisation entre les envois
-      await sleep(100);
-    }
+    await handleUpdate(req.body);
   } catch (error) {
     console.error(
-      "Erreur worker:",
+      "Erreur traitement:",
       error.message
     );
-  } finally {
-    workerBusy = false;
   }
-}
+});
 
-// ==========================================
-// DÉMARRAGE DU BOT
-// ==========================================
+// ======================================
+// PAGE SANTÉ
+// ======================================
+
+app.get("/", (req, res) => {
+  res.status(200).send(
+    "Doctor Pharma 33 - Bot actif"
+  );
+});
+
+// ======================================
+// DÉMARRAGE
+// ======================================
 
 async function start() {
-  const me = await telegram("getMe");
 
-  if (
-    me.username?.toLowerCase() !==
-    BOT_USERNAME.toLowerCase()
-  ) {
-    throw new Error(
-      `Token incorrect : @${me.username}`
-    );
+  if (!TOKEN) {
+    throw new Error("BOT_TOKEN manquant");
   }
 
-  await telegram("setWebhook", {
-    url: `${BASE_URL}/telegram/webhook`,
-    secret_token: WEBHOOK_SECRET,
-    allowed_updates: [
-      "message",
-      "callback_query"
-    ]
+  if (!BASE_URL.startsWith("https://")) {
+    throw new Error("BASE_URL invalide");
+  }
+
+  if (!WEBHOOK_SECRET) {
+    throw new Error("WEBHOOK_SECRET manquant");
+  }
+
+  if (!ADMIN_ID) {
+    throw new Error("ADMIN_ID manquant");
+  }
+
+  app.listen(PORT, async () => {
+
+    console.log("Serveur actif sur", PORT);
+
+    try {
+
+      // Retire /start du menu visible
+      await telegram("deleteMyCommands", {
+        scope: {
+          type: "default"
+        }
+      });
+
+      // Aucun ancien message en attente
+      await telegram("setWebhook", {
+        url: `${BASE_URL}/webhook`,
+        secret_token: WEBHOOK_SECRET,
+        allowed_updates: ["message"],
+        drop_pending_updates: true
+      });
+
+      console.log("Webhook installé");
+      console.log("Bot prêt");
+
+    } catch (error) {
+      console.error(
+        "Erreur initialisation:",
+        error.message
+      );
+    }
   });
-
-  app.listen(PORT, () => {
-    console.log(
-      `Doctor Pharma 33 actif sur ${PORT}`
-    );
-
-    console.log(
-      `Bot connecté : @${me.username}`
-    );
-  });
-
-  setInterval(processQueue, 5000);
-  processQueue();
 }
 
-start().catch(error => {
-  console.error(
-    "Démarrage impossible:",
-    error.message
-  );
-
-  process.exit(1);
-});
+start().catch(console.error);
