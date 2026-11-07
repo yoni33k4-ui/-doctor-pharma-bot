@@ -30,7 +30,7 @@ const ADMIN_ID = String(
 const PORT = Number(process.env.PORT || 3000);
 
 // ========================================
-// LIENS DES 4 BOUTONS
+// LIENS DES 5 BOUTONS
 // ========================================
 
 const TATO_URL =
@@ -44,6 +44,9 @@ const AVIS_URL =
 
 const CONTACT_URL =
   "https://t.me/Doctor_commande33k";
+
+const BOUTIQUE_URL =
+  "https://layer-aligner.lovable.app";
 
 // ========================================
 // ADMINISTRATION DOCTOR PHARMA 33
@@ -147,7 +150,7 @@ const HOME_KEYBOARD = {
 };
 
 // ========================================
-// BOUTONS EN GRILLE 2 X 2
+// LES 5 BOUTONS EN GRILLE
 // ========================================
 
 function linksKeyboard() {
@@ -171,6 +174,15 @@ function linksKeyboard() {
         {
           text: "📞 Contact",
           url: CONTACT_URL
+        }
+      ],
+      [
+        {
+          text: "🛍️ Boutique",
+          web_app: {
+            url: BOUTIQUE_URL
+          },
+          style: "primary"
         }
       ]
     ]
